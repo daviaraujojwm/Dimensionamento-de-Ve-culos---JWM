@@ -92,15 +92,24 @@ if st.button("➕ Adicionar carga"):
         if c <= 0 or l <= 0 or a <= 0 or p <= 0:
             st.error("Os valores devem ser maiores que zero.")
         else:
-            vol_unit = c * l * a
-            vol_total = vol_unit * quantidade
-            peso_total = p * quantidade
-            st.session_state.cargas.append({
-                "Comprimento (m)": c, "Largura (m)": l, "Altura (m)": a,
-                "Peso unitário (kg)": p, "Quantidade": quantidade,
-                "Volume total (m³)": vol_total, "Peso total (kg)": peso_total
-            })
-            st.success("Carga adicionada ✅")
+            # 🚨 Verificação antecipada de excedente
+            max_comp = max(v["comprimento"] for v in lista_veiculos)
+            max_larg = max(v["largura"] for v in lista_veiculos)
+            max_alt = max(v["altura"] for v in lista_veiculos)
+            max_peso = max(v["peso_max"] for v in lista_veiculos)
+
+            if c > max_comp or l > max_larg or a > max_alt or p > max_peso:
+                st.warning("⚠️ A carga excede as dimensões ou o peso máximo de todos os veículos da frota!")
+            else:
+                vol_unit = c * l * a
+                vol_total = vol_unit * quantidade
+                peso_total = p * quantidade
+                st.session_state.cargas.append({
+                    "Comprimento (m)": c, "Largura (m)": l, "Altura (m)": a,
+                    "Peso unitário (kg)": p, "Quantidade": quantidade,
+                    "Volume total (m³)": vol_total, "Peso total (kg)": peso_total
+                })
+                st.success("Carga adicionada ✅")
     except Exception as e:
         st.error(f"Erro: {e}")
 
@@ -178,7 +187,11 @@ if st.button("Calcular"):
             for e in erros:
                 st.warning(e)
 
-        if resultados:
+        # 🚨 Mensagem se nenhum veículo couber
+        if not resultados:
+            st.error("🚫 Nenhum veículo comporta as dimensões ou o peso informados. "
+                     "Verifique se as cargas não excedem os limites máximos da frota.")
+        else:
             df_result = pd.DataFrame(resultados).sort_values(by="Viabilidade (%)", ascending=False)
             melhor = df_result.iloc[0]["Veículo"]
 
@@ -201,7 +214,6 @@ if st.button("Calcular"):
                 color_discrete_sequence=cores,
             )
 
-            # texto no centro com o nome do melhor veículo
             fig.update_layout(
                 title="Distribuição de Viabilidade por Veículo",
                 annotations=[
@@ -224,5 +236,3 @@ if st.button("Calcular"):
                 file_name="resultado_cubagem.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
-        else:
-            st.error("🚫 Nenhum veículo viável encontrado.")
