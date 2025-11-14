@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 from io import BytesIO
-import plotly.express as px
 import plotly.graph_objects as go
 
 # ===== CONFIGURAÇÃO INICIAL =====
@@ -74,9 +73,13 @@ quantidade = st.number_input("Quantidade:", min_value=1, value=1, step=1, key="q
 
 # ===== FUNÇÕES =====
 def parse_input(v):
-    if not v:
-        raise ValueError("Campo vazio")
-    return float(str(v).replace(",", "."))
+    if not v or str(v).strip() == "":
+        raise ValueError("Campo vazio ou inválido.")
+    v = str(v).replace(",", ".")
+    try:
+        return float(v)
+    except:
+        raise ValueError("Digite apenas números.")
 
 def gerar_excel_bytes(df_result, cargas):
     out = BytesIO()
@@ -89,27 +92,22 @@ def gerar_excel_bytes(df_result, cargas):
 if st.button("➕ Adicionar carga"):
     try:
         c, l, a, p = map(parse_input, [comp, larg, alt, peso])
-        if c <= 0 or l <= 0 or a <= 0 or p <= 0:
+        if min(c, l, a, p) <= 0:
             st.error("Os valores devem ser maiores que zero.")
         else:
-            # 🚨 Verificação antecipada de excedente
-            max_comp = max(v["comprimento"] for v in lista_veiculos)
-            max_larg = max(v["largura"] for v in lista_veiculos)
-            max_alt = max(v["altura"] for v in lista_veiculos)
-            max_peso = max(v["peso_max"] for v in lista_veiculos)
-
-            if c > max_comp or l > max_larg or a > max_alt or p > max_peso:
-                st.warning("⚠️ A carga excede as dimensões ou o peso máximo de todos os veículos da frota!")
-            else:
-                vol_unit = c * l * a
-                vol_total = vol_unit * quantidade
-                peso_total = p * quantidade
-                st.session_state.cargas.append({
-                    "Comprimento (m)": c, "Largura (m)": l, "Altura (m)": a,
-                    "Peso unitário (kg)": p, "Quantidade": quantidade,
-                    "Volume total (m³)": vol_total, "Peso total (kg)": peso_total
-                })
-                st.success("Carga adicionada ✅")
+            vol_unit = c * l * a
+            vol_total = vol_unit * quantidade
+            peso_total = p * quantidade
+            st.session_state.cargas.append({
+                "Comprimento (m)": c,
+                "Largura (m)": l,
+                "Altura (m)": a,
+                "Peso unitário (kg)": p,
+                "Quantidade": quantidade,
+                "Volume total (m³)": vol_total,
+                "Peso total (kg)": peso_total
+            })
+            st.success("Carga adicionada ✅")
     except Exception as e:
         st.error(f"Erro: {e}")
 
@@ -117,7 +115,7 @@ if st.button("➕ Adicionar carga"):
 if st.session_state.cargas:
     st.subheader("📋 Cargas adicionadas")
     for i, carga in enumerate(st.session_state.cargas):
-        with st.container(border=True):
+        with st.container():
             col1, col2 = st.columns([9, 1])
             with col1:
                 st.write(
@@ -127,7 +125,7 @@ if st.session_state.cargas:
                 )
             with col2:
                 if st.button("❌", key=f"excluir_{i}"):
-                    st.session_state.cargas.pop(i)
+                    del st.session_state.cargas[i]
                     st.rerun()
 
     if st.button("🧹 Limpar todas as cargas"):
@@ -138,101 +136,138 @@ else:
 
 # ===== SELEÇÃO DE VEÍCULOS =====
 todos_nomes = [v["nome"] for v in lista_veiculos]
-selecionados = st.multiselect("🚛 Selecione veículos específicos (ou deixe em branco para testar todos):", todos_nomes)
+selecionados = st.multiselect(
+    "🚛 Selecione veículos específicos (ou deixe em branco para testar todos):",
+    todos_nomes
+)
 
 # ===== CÁLCULO =====
 if st.button("Calcular"):
     if not st.session_state.cargas:
         st.warning("Adicione ao menos uma carga antes de calcular.")
-    else:
-        veiculos_testar = [v for v in lista_veiculos if not selecionados or v["nome"] in selecionados]
-        df_cargas = pd.DataFrame(st.session_state.cargas)
-        vol_total = df_cargas["Volume total (m³)"].sum()
-        peso_total = df_cargas["Peso total (kg)"].sum()
+        st.stop()
 
-        resultados, erros = [], []
-        for v in veiculos_testar:
-            comp_ok = all(c["Comprimento (m)"] <= v["comprimento"] for c in st.session_state.cargas)
-            larg_ok = all(c["Largura (m)"] <= v["largura"] for c in st.session_state.cargas)
-            alt_ok = all(c["Altura (m)"] <= v["altura"] for c in st.session_state.cargas)
-            peso_ok = all(c["Peso unitário (kg)"] <= v["peso_max"] for c in st.session_state.cargas)
+    veiculos_testar = [v for v in lista_veiculos if not selecionados or v["nome"] in selecionados]
 
-            if not all([comp_ok, larg_ok, alt_ok, peso_ok]):
-                motivos = []
-                if not comp_ok: motivos.append("Comprimento excedido")
-                if not larg_ok: motivos.append("Largura excedida")
-                if not alt_ok: motivos.append("Altura excedida")
-                if not peso_ok: motivos.append("Peso unitário excedido")
-                erros.append(f"❌ {v['nome']}: {'; '.join(motivos)}")
-                continue
+    df_cargas = pd.DataFrame(st.session_state.cargas)
+    vol_total = df_cargas["Volume total (m³)"].sum()
+    peso_total = df_cargas["Peso total (kg)"].sum()
 
-            cubagem = v["comprimento"] * v["largura"] * v["altura"]
-            aproveitamento_vol = (vol_total / cubagem) * 100
-            aproveitamento_peso = (peso_total / v["peso_max"]) * 100
-            viabilidade = (aproveitamento_vol * 0.6) + (aproveitamento_peso * 0.4)
+    resultados, erros = [], []
 
-            resultados.append({
-                "Veículo": v["nome"],
-                "Cubagem Veículo (m³)": round(cubagem, 2),
-                "Peso Máx (kg)": v["peso_max"],
-                "Volume Total (m³)": round(vol_total, 2),
-                "Peso Total (kg)": round(peso_total, 2),
-                "Aproveitamento Volume (%)": round(aproveitamento_vol, 2),
-                "Aproveitamento Peso (%)": round(aproveitamento_peso, 2),
-                "Viabilidade (%)": round(viabilidade, 2)
-            })
+    for v in veiculos_testar:
+        comp_ok = all(c["Comprimento (m)"] <= v["comprimento"] for c in st.session_state.cargas)
+        larg_ok = all(c["Largura (m)"] <= v["largura"] for c in st.session_state.cargas)
+        alt_ok = all(c["Altura (m)"] <= v["altura"] for c in st.session_state.cargas)
+        peso_ok = peso_total <= v["peso_max"]
 
-        if erros:
-            st.subheader("🔍 Restrições encontradas")
-            for e in erros:
-                st.warning(e)
+        if not comp_ok or not larg_ok or not alt_ok:
+            msg = []
+            if not comp_ok: msg.append("Comprimento excede")
+            if not larg_ok: msg.append("Largura excede")
+            if not alt_ok: msg.append("Altura excede")
+            erros.append(f"❌ {v['nome']}: {'; '.join(msg)}")
+            continue
 
-        # 🚨 Mensagem se nenhum veículo couber
-        if not resultados:
-            st.error("🚫 Nenhum veículo comporta as dimensões ou o peso informados. "
-                     "Verifique se as cargas não excedem os limites máximos da frota.")
-        else:
-            df_result = pd.DataFrame(resultados).sort_values(by="Viabilidade (%)", ascending=False)
-            melhor = df_result.iloc[0]["Veículo"]
+        cubagem = v["comprimento"] * v["largura"] * v["altura"]
+        if vol_total > cubagem or not peso_ok:
+            msg = []
+            if vol_total > cubagem: msg.append("Volume excedido")
+            if not peso_ok: msg.append("Peso excedido")
+            erros.append(f"❌ {v['nome']}: {'; '.join(msg)}")
+            continue
 
-            st.subheader("🚛 Veículos Viáveis")
+        aproveitamento_vol = (vol_total / cubagem) * 100
+        aproveitamento_peso = (peso_total / v["peso_max"]) * 100
+        viabilidade = (aproveitamento_vol * 0.6) + (aproveitamento_peso * 0.4)
 
-            # destaque verde na tabela
-            def highlight_best(row):
-                color = 'background-color: lightgreen; font-weight: bold;' if row["Veículo"] == melhor else ''
-                return [color] * len(row)
+        resultados.append({
+            "Veículo": v["nome"],
+            "Cubagem Veículo (m³)": round(cubagem, 2),
+            "Peso Máx (kg)": v["peso_max"],
+            "Volume Total (m³)": round(vol_total, 2),
+            "Peso Total (kg)": round(peso_total, 2),
+            "Aproveitamento Volume (%)": round(aproveitamento_vol, 2),
+            "Aproveitamento Peso (%)": round(aproveitamento_peso, 2),
+            "Viabilidade (%)": round(viabilidade, 2),
+        })
 
-            st.dataframe(df_result.style.apply(highlight_best, axis=1), use_container_width=True)
-            st.markdown(f"### ⭐️ **Melhor opção:** <span style='color:green; font-weight:bold;'>{melhor}</span>", unsafe_allow_html=True)
+    if erros:
+        st.subheader("🔍 Restrições encontradas")
+        for e in erros:
+            st.warning(e)
 
-            # ===== GRÁFICO COM NOME NO CENTRO =====
-            cores = ['green' if v == melhor else '#66b2b2' for v in df_result["Veículo"]]
-            fig = px.pie(
-                df_result,
-                names="Veículo",
-                values="Viabilidade (%)",
-                color_discrete_sequence=cores,
-            )
+    if not resultados:
+        st.error("🚫 Nenhum veículo comporta as cargas informadas.")
+        st.stop()
 
-            fig.update_layout(
-                title="Distribuição de Viabilidade por Veículo",
-                annotations=[
-                    dict(
-                        text=f"⭐️<br>{melhor}",
-                        x=0.5, y=0.5,
-                        font=dict(size=18, color="green", family="Arial Black"),
-                        showarrow=False
-                    )
-                ]
-            )
+    df_result = pd.DataFrame(resultados).sort_values("Viabilidade (%)", ascending=False).reset_index(drop=True)
+    melhor = df_result.loc[0, "Veículo"]
 
-            st.plotly_chart(fig, use_container_width=True)
+    st.subheader("🚛 Veículos Viáveis")
+    st.dataframe(
+        df_result.style.apply(
+            lambda row: ['background-color: lightgreen; font-weight: bold;' if row["Veículo"] == melhor else '' for _ in row],
+            axis=1
+        ),
+        use_container_width=True
+    )
 
-            # ===== EXPORTAR =====
-            excel_bytes = gerar_excel_bytes(df_result, st.session_state.cargas)
-            st.download_button(
-                label="📥 Baixar resultado em Excel",
-                data=excel_bytes,
-                file_name="resultado_cubagem.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
+    st.markdown(
+        f"### ⭐ **Melhor opção:** <span style='color:green; font-weight:bold;'>{melhor}</span>",
+        unsafe_allow_html=True
+    )
+
+    # ===== GRÁFICO 3D SEM POSSIBILIDADE DE ERRO =====
+    st.subheader("📊 Gráfico 3D de Viabilidade dos Veículos")
+
+    fig3d = go.Figure()
+
+    for i, row in df_result.iterrows():
+        fig3d.add_trace(go.Scatter3d(
+            x=[i, i],
+            y=[0, 0],
+            z=[0, row["Viabilidade (%)"]],
+            mode="lines",
+            line=dict(width=40, color=row["Viabilidade (%)"], colorscale="Viridis"),
+            name=row["Veículo"],
+        ))
+
+    melhor_idx = 0
+    melhor_viab = df_result.loc[0, "Viabilidade (%)"]
+
+    fig3d.add_trace(go.Scatter3d(
+        x=[melhor_idx],
+        y=[0],
+        z=[melhor_viab + 2],
+        mode="text",
+        text=["⭐"],
+        textfont=dict(size=22, color="gold"),
+        hoverinfo="skip",
+    ))
+
+    fig3d.update_layout(
+        scene=dict(
+            xaxis=dict(
+                title="Veículo",
+                tickvals=list(range(len(df_result))),
+                ticktext=df_result["Veículo"],
+            ),
+            yaxis=dict(title=""),
+            zaxis=dict(title="Viabilidade (%)"),
+            camera=dict(eye=dict(x=1.6, y=1.6, z=1.2)),
+        ),
+        height=650,
+        margin=dict(l=0, r=0, b=0, t=50),
+    )
+
+    st.plotly_chart(fig3d, use_container_width=True)
+
+    # ===== DOWNLOAD =====
+    excel_bytes = gerar_excel_bytes(df_result, st.session_state.cargas)
+    st.download_button(
+        label="📥 Baixar resultado em Excel",
+        data=excel_bytes,
+        file_name="resultado_cubagem.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
