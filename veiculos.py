@@ -319,15 +319,20 @@ if st.button("Calcular"):
 
     styled = df_result.style.apply(highlight_best, axis=1)
 
-    st.subheader("🚛 Veículos Viáveis")
-    st.dataframe(styled, use_container_width=True)
+   st.subheader("🚛 Veículos Viáveis")
+st.dataframe(styled, use_container_width=True)
 
-    st.markdown(f"### ⭐ Melhor opção: **{melhor}**")
+st.markdown(f"### ⭐ Melhor opção: **{melhor}**")
 
-    # ============================
-    # GRÁFICO 3D
-    # ============================
-    st.subheader("📊 Viabilidade (3D)")
+if erros:
+    st.subheader("⚠️ Restrições encontradas")
+    for e in erros:
+        st.warning(e)
+
+# ============================
+# GRÁFICO 3D
+# ============================
+st.subheader("📊 Viabilidade (3D)")
 
     fig = go.Figure()
 
@@ -365,3 +370,4 @@ if st.button("Calcular"):
         file_name="dimensionamento.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
+
