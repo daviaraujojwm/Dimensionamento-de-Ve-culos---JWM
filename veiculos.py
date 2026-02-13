@@ -307,7 +307,7 @@ if st.button("Calcular"):
 
     def highlight_best(row):
         if row["Veículo"] == melhor:
-            return ['background-color: #9cff9c'] * len(row)
+            return ['background-color: #28FF77'] * len(row)
         return [''] * len(row)
 
     styled = df_result.style.apply(highlight_best, axis=1)
@@ -365,6 +365,7 @@ if st.button("Calcular"):
         file_name="dimensionamento.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
+
 
 
 
