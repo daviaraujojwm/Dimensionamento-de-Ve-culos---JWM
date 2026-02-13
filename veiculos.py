@@ -319,7 +319,7 @@ if st.button("Calcular"):
 
     styled = df_result.style.apply(highlight_best, axis=1)
 
-   st.subheader("🚛 Veículos Viáveis")
+st.subheader("🚛 Veículos Viáveis")
 st.dataframe(styled, use_container_width=True)
 
 st.markdown(f"### ⭐ Melhor opção: **{melhor}**")
@@ -370,4 +370,5 @@ st.subheader("📊 Viabilidade (3D)")
         file_name="dimensionamento.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
+
 
