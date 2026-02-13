@@ -332,7 +332,7 @@ if erros:
 # ============================
 # GRÁFICO 3D
 # ============================
-st.subheader("📊 Viabilidade (3D)")
+    st.subheader("📊 Viabilidade (3D)")
 
     fig = go.Figure()
 
@@ -345,6 +345,7 @@ st.subheader("📊 Viabilidade (3D)")
             line=dict(width=40, color=row["Viabilidade (%)"], colorscale="Viridis"),
             showlegend=False
         ))
+
 
     fig.update_layout(
         scene=dict(
@@ -370,5 +371,6 @@ st.subheader("📊 Viabilidade (3D)")
         file_name="dimensionamento.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
+
 
 
