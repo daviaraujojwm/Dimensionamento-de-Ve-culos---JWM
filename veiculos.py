@@ -269,6 +269,7 @@ if st.button("Calcular"):
             continue
 
         cubagem = v["comprimento"] * v["largura"] * v["altura"]
+
         if vol_total > cubagem:
             erros.append(f"❌ {v['nome']}: Volume excedido.")
             continue
@@ -296,20 +297,12 @@ if st.button("Calcular"):
             "Viabilidade (%)": round(viabilidade, 2)
         })
 
-    if erros:
-        st.subheader("⚠️ Restrições encontradas")
-        for e in erros:
-            st.warning(e)
-
     if not resultados:
         st.error("Nenhum veículo comporta as cargas.")
         st.stop()
 
     df_result = pd.DataFrame(resultados).sort_values("Viabilidade (%)", ascending=False).reset_index(drop=True)
 
-    # ======================================================
-    # >>> LINHA VERDE DO MELHOR VEÍCULO (NOVO)
-    # ======================================================
     melhor = df_result.loc[0, "Veículo"]
 
     def highlight_best(row):
@@ -319,19 +312,21 @@ if st.button("Calcular"):
 
     styled = df_result.style.apply(highlight_best, axis=1)
 
-st.subheader("🚛 Veículos Viáveis")
-st.dataframe(styled, use_container_width=True)
+    # ✅ TABELA PRIMEIRO
+    st.subheader("🚛 Veículos Viáveis")
+    st.dataframe(styled, use_container_width=True)
 
-st.markdown(f"### ⭐ Melhor opção: **{melhor}**")
+    st.markdown(f"### ⭐ Melhor opção: **{melhor}**")
 
-if erros:
-    st.subheader("⚠️ Restrições encontradas")
-    for e in erros:
-        st.warning(e)
+    # ✅ RESTRIÇÕES DEPOIS
+    if erros:
+        st.subheader("⚠️ Restrições encontradas")
+        for e in erros:
+            st.warning(e)
 
-# ============================
-# GRÁFICO 3D
-# ============================
+    # ============================
+    # GRÁFICO 3D
+    # ============================
     st.subheader("📊 Viabilidade (3D)")
 
     fig = go.Figure()
@@ -345,7 +340,6 @@ if erros:
             line=dict(width=40, color=row["Viabilidade (%)"], colorscale="Viridis"),
             showlegend=False
         ))
-
 
     fig.update_layout(
         scene=dict(
@@ -371,6 +365,7 @@ if erros:
         file_name="dimensionamento.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
+
 
 
 
