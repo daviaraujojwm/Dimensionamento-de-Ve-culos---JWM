@@ -268,14 +268,20 @@ if st.button("Calcular"):
             erros.append(f"❌ {v['nome']}: Item maior que o piso.")
             continue
 
-        cubagem = v["comprimento"] * v["largura"] * v["altura"]
-
-        if vol_total > cubagem:
-            erros.append(f"❌ {v['nome']}: Volume excedido.")
-            continue
-
+    cubagem = v["comprimento"] * v["largura"] * v["altura"]
+        
+        # valida somente peso
         if peso_total > v["peso_max"]:
-            erros.append(f"❌ {v['nome']}: Peso excedido.")
+            erros    .append(f"❌ {v['nome']}: Peso excedido.")
+            continue
+        
+        # valida empilhamento real no piso
+        if not cabe_no_piso_heuristica(
+            cargas_unitarias,
+            v["comprimento"],
+            v["largura"]
+        ):
+            erros.append(f"❌ {v['nome']}: Não cabe no piso.")
             continue
 
         if not cabe_no_piso_heuristica(cargas_unitarias, v["comprimento"], v["largura"]):
@@ -507,3 +513,4 @@ if "df_result" in locals():
     fig3d.update_layout(height=600)
 
     st.plotly_chart(fig3d, use_container_width=True)
+
