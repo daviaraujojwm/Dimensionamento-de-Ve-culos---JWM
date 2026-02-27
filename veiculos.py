@@ -366,7 +366,144 @@ if st.button("Calcular"):
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
 
+# ==========================================================
+# 🔥 IA LOGÍSTICA AVANÇADA (ADICIONADO SEM ALTERAR O ORIGINAL)
+# ==========================================================
+
+st.markdown("---")
+st.header("🤖 Inteligência Logística Avançada")
+
+# ============================
+# ORIENTAÇÃO AUTOMÁTICA 3 EIXOS
+# ============================
+def melhor_orientacao(carga, veiculo):
+    from itertools import permutations
+
+    dims = [carga["Comprimento (m)"], carga["Largura (m)"], carga["Altura (m)"]]
+
+    melhores = []
+
+    for perm in permutations(dims):
+        comp, larg, alt = perm
+        if (
+            comp <= veiculo["comprimento"]
+            and larg <= veiculo["largura"]
+            and alt <= veiculo["altura"]
+        ):
+            volume = comp * larg * alt
+            melhores.append((perm, volume))
+
+    if not melhores:
+        return None
+
+    melhores.sort(key=lambda x: x[1], reverse=True)
+    return melhores[0][0]
 
 
+# ============================
+# EFICIÊNCIA LOGÍSTICA REAL
+# ============================
+def eficiencia_logistica(vol_aprov, peso_aprov):
+    ocupacao_media = (vol_aprov + peso_aprov) / 2
+
+    penalidade_espaco_vazio = max(0, 100 - ocupacao_media) * 0.15
+
+    eficiencia = ocupacao_media - penalidade_espaco_vazio
+    return max(0, round(eficiencia, 2))
 
 
+# ============================
+# CUSTO OPERACIONAL ESTIMADO
+# ============================
+custos_operacionais = {
+    "Fiorino": 1.2,
+    "Van Utilitário": 1.4,
+    "HR Baú": 2.0,
+    "HR Aberto": 2.0,
+    "Veículo 3/4 Aberto": 3.0,
+    "Veículo 3/4 Baú": 3.2,
+    "Toco Aberto": 4.5,
+    "Toco Baú": 4.8,
+    "VUC Baú": 3.5,
+    "Truck Aberto": 6.5,
+    "Truck Baú": 7.0,
+    "Bi-Truck Aberto": 8.0,
+    "Bi-Truck Baú": 8.5,
+    "Carreta Sider": 10.0,
+    "Carreta Wanderleia": 11.0,
+    "Carreta Wanderleia Aberta": 13.0,
+    "Carreta Wanderleia Sider": 12.5,
+    "Carreta Rodo Trem": 18.0,
+    "Bitruck Sider": 9.0,
+    "Carreta Grade Baixa": 11.5,
+    "Wanderleia Carga Seca": 10.5,
+}
+
+# ============================
+# IA ESCOLHA VEÍCULO IDEAL
+# ============================
+if "df_result" in locals():
+
+    df_ia = df_result.copy()
+
+    eficiencias = []
+    scores_ia = []
+
+    for _, row in df_ia.iterrows():
+
+        eficiencia = eficiencia_logistica(
+            row["Aproveitamento Volume (%)"],
+            row["Aproveitamento Peso (%)"]
+        )
+
+        custo = custos_operacionais.get(row["Veículo"], 10)
+
+        score = (eficiencia * 0.7) - (custo * 1.3)
+
+        eficiencias.append(eficiencia)
+        scores_ia.append(round(score, 2))
+
+    df_ia["Eficiência Logística (%)"] = eficiencias
+    df_ia["Score IA"] = scores_ia
+
+    df_ia = df_ia.sort_values("Score IA", ascending=False)
+
+    melhor_ia = df_ia.iloc[0]["Veículo"]
+
+    st.subheader("🧠 IA — Veículo Ideal Operacional")
+
+    def highlight_ai(row):
+        if row["Veículo"] == melhor_ia:
+            return ['background-color: #00E5FF'] * len(row)
+        return [''] * len(row)
+
+    st.dataframe(
+        df_ia.style.apply(highlight_ai, axis=1),
+        use_container_width=True
+    )
+
+    st.success(f"🚀 IA recomenda operacionalmente: **{melhor_ia}**")
+
+
+# ============================
+# SIMULAÇÃO 3D DE OCUPAÇÃO
+# ============================
+if "df_result" in locals():
+
+    st.subheader("📦 Simulação 3D de Ocupação")
+
+    fig3d = go.Figure()
+
+    for i, row in df_result.iterrows():
+        fig3d.add_trace(go.Bar3d(
+            x=[i],
+            y=[0],
+            z=[0],
+            dx=0.5,
+            dy=0.5,
+            dz=row["Aproveitamento Volume (%)"],
+        ))
+
+    fig3d.update_layout(height=600)
+
+    st.plotly_chart(fig3d, use_container_width=True)
