@@ -394,17 +394,17 @@ fig3d.update_layout(
 
 st.plotly_chart(fig3d, use_container_width=True)
 
-    # ============================
-    # DOWNLOAD EXCEL
-    # ============================
-    excel = gerar_excel_bytes(df_result, st.session_state.cargas)
-    st.download_button(
-        "📥 Baixar Excel",
-        data=excel,
-        file_name="dimensionamento.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
+# ============================
+# DOWNLOAD EXCEL
+# ============================
+excel = gerar_excel_bytes(df_result, st.session_state.cargas)
 
+st.download_button(
+    "📥 Baixar Excel",
+    data=excel,
+    file_name="dimensionamento.xlsx",
+    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+)
 # ==========================================================
 # 🔥 IA LOGÍSTICA AVANÇADA (ADICIONADO SEM ALTERAR O ORIGINAL)
 # ==========================================================
@@ -546,6 +546,7 @@ if "df_result" in locals():
     fig3d.update_layout(height=600)
 
     st.plotly_chart(fig3d, use_container_width=True)
+
 
 
 
