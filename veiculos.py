@@ -338,36 +338,61 @@ if st.button("Calcular"):
         for e in erros:
             st.warning(e)
 
-    # ============================
-    # GRÁFICO 3D
-    # ============================
-    st.subheader("📊 Viabilidade (3D)")
+   # ============================
+# GRÁFICO 3D
+# ============================
+st.subheader("📊 Viabilidade (3D)")
 
-    fig = go.Figure()
+fig3d = go.Figure()
 
-    for i, row in df_result.iterrows():
-        fig.add_trace(go.Scatter3d(
-            x=[i, i],
-            y=[0, 0],
-            z=[0, row["Viabilidade (%)"]],
-            mode="lines",
-            line=dict(width=40, color=row["Viabilidade (%)"], colorscale="Viridis"),
-            showlegend=False
-        ))
+for i, row in df_result.iterrows():
 
-    fig.update_layout(
-        scene=dict(
-            xaxis=dict(
-                title="Veículo",
-                tickvals=list(range(len(df_result))),
-                ticktext=df_result["Veículo"]
-            ),
-            zaxis=dict(title="Viabilidade (%)"),
+    # altura da barra = viabilidade
+    altura = row["Viabilidade (%)"]
+
+    # posição da barra
+    x = i
+    y = 0
+    z = 0
+
+    largura = 0.6
+    profundidade = 0.6
+
+    # criando um bloco 3D (cubo/barra)
+    fig3d.add_trace(go.Mesh3d(
+        x=[
+            x, x+largura, x+largura, x,
+            x, x+largura, x+largura, x
+        ],
+        y=[
+            y, y, y+profundidade, y+profundidade,
+            y, y, y+profundidade, y+profundidade
+        ],
+        z=[
+            z, z, z, z,
+            altura, altura, altura, altura
+        ],
+        opacity=0.7,
+        alphahull=0,
+        name=row["Veículo"],
+        showscale=False
+    ))
+
+fig3d.update_layout(
+    scene=dict(
+        xaxis=dict(
+            title="Veículo",
+            tickvals=list(range(len(df_result))),
+            ticktext=df_result["Veículo"]
         ),
-        height=650
-    )
+        yaxis=dict(title=""),
+        zaxis=dict(title="Viabilidade (%)")
+    ),
+    height=650,
+    margin=dict(l=0, r=0, b=0, t=40)
+)
 
-    st.plotly_chart(fig, use_container_width=True)
+st.plotly_chart(fig3d, use_container_width=True)
 
     # ============================
     # DOWNLOAD EXCEL
@@ -521,6 +546,7 @@ if "df_result" in locals():
     fig3d.update_layout(height=600)
 
     st.plotly_chart(fig3d, use_container_width=True)
+
 
 
 
