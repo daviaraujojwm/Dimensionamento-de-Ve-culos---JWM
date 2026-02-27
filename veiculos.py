@@ -257,12 +257,10 @@ cargas_unitarias = expand_cargas_unitarias(st.session_state.cargas)
 
 for v in veiculos_testar:
 
-    # valida altura
     if not all(c["Altura (m)"] <= v["altura"] for c in st.session_state.cargas):
         erros.append(f"❌ {v['nome']}: Altura excedida.")
         continue
 
-    # valida dimensões individuais
     if not all(
         ((c["Comprimento (m)"] <= v["comprimento"] and c["Largura (m)"] <= v["largura"]) or
          (c["Largura (m)"] <= v["comprimento"] and c["Comprimento (m)"] <= v["largura"]))
@@ -273,12 +271,12 @@ for v in veiculos_testar:
 
     cubagem = v["comprimento"] * v["largura"] * v["altura"]
 
-    # ✅ valida peso
+    # valida peso
     if peso_total > v["peso_max"]:
         erros.append(f"❌ {v['nome']}: Peso excedido.")
         continue
 
-    # ✅ valida empilhamento real
+    # valida piso
     if not cabe_no_piso_heuristica(
         cargas_unitarias,
         v["comprimento"],
@@ -291,16 +289,16 @@ for v in veiculos_testar:
     aproveitamento_peso = (peso_total / v["peso_max"]) * 100
     viabilidade = (aproveitamento_vol * 0.6) + (aproveitamento_peso * 0.4)
 
-        resultados.append({
-            "Veículo": v["nome"],
-            "Cubagem (m³)": round(cubagem, 3),
-            "Peso Máx (kg)": v["peso_max"],
-            "Volume Total (m³)": round(vol_total, 3),
-            "Peso Total (kg)": round(peso_total, 3),
-            "Aproveitamento Volume (%)": round(aproveitamento_vol, 2),
-            "Aproveitamento Peso (%)": round(aproveitamento_peso, 2),
-            "Viabilidade (%)": round(viabilidade, 2)
-        })
+    resultados.append({
+        "Veículo": v["nome"],
+        "Cubagem (m³)": round(cubagem, 3),
+        "Peso Máx (kg)": v["peso_max"],
+        "Volume Total (m³)": round(vol_total, 3),
+        "Peso Total (kg)": round(peso_total, 3),
+        "Aproveitamento Volume (%)": round(aproveitamento_vol, 2),
+        "Aproveitamento Peso (%)": round(aproveitamento_peso, 2),
+        "Viabilidade (%)": round(viabilidade, 2)
+    })
 
     if not resultados:
         st.error("Nenhum veículo comporta as cargas.")
@@ -512,6 +510,7 @@ if "df_result" in locals():
     fig3d.update_layout(height=600)
 
     st.plotly_chart(fig3d, use_container_width=True)
+
 
 
 
