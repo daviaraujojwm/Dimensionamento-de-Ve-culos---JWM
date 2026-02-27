@@ -253,7 +253,7 @@ if st.button("Calcular"):
 
     df_cargas = pd.DataFrame(st.session_state.cargas)
 
-    # ✅ proteção contra dataframe vazio
+    # proteção contra dataframe vazio
     if df_cargas.empty:
         st.warning("Nenhuma carga válida.")
         st.stop()
@@ -264,50 +264,52 @@ if st.button("Calcular"):
     resultados = []
     erros = []
     cargas_unitarias = expand_cargas_unitarias(st.session_state.cargas)
-for v in veiculos_testar:
 
-    if not all(c["Altura (m)"] <= v["altura"] for c in st.session_state.cargas):
-        erros.append(f"❌ {v['nome']}: Altura excedida.")
-        continue
+    # ✅ AGORA ESTÁ NO LUGAR CERTO
+    for v in veiculos_testar:
 
-    if not all(
-        ((c["Comprimento (m)"] <= v["comprimento"] and c["Largura (m)"] <= v["largura"]) or
-         (c["Largura (m)"] <= v["comprimento"] and c["Comprimento (m)"] <= v["largura"]))
-        for c in st.session_state.cargas
-    ):
-        erros.append(f"❌ {v['nome']}: Item maior que o piso.")
-        continue
+        if not all(c["Altura (m)"] <= v["altura"] for c in st.session_state.cargas):
+            erros.append(f"❌ {v['nome']}: Altura excedida.")
+            continue
 
-    cubagem = v["comprimento"] * v["largura"] * v["altura"]
+        if not all(
+            ((c["Comprimento (m)"] <= v["comprimento"] and c["Largura (m)"] <= v["largura"]) or
+             (c["Largura (m)"] <= v["comprimento"] and c["Comprimento (m)"] <= v["largura"]))
+            for c in st.session_state.cargas
+        ):
+            erros.append(f"❌ {v['nome']}: Item maior que o piso.")
+            continue
 
-    # valida peso
-    if peso_total > v["peso_max"]:
-        erros.append(f"❌ {v['nome']}: Peso excedido.")
-        continue
+        cubagem = v["comprimento"] * v["largura"] * v["altura"]
 
-    # valida piso
-    if not cabe_no_piso_heuristica(
-        cargas_unitarias,
-        v["comprimento"],
-        v["largura"]
-    ):
-        erros.append(f"❌ {v['nome']}: Não cabe no piso.")
-        continue
+        # valida peso
+        if peso_total > v["peso_max"]:
+            erros.append(f"❌ {v['nome']}: Peso excedido.")
+            continue
 
-    aproveitamento_vol = (vol_total / cubagem) * 100
-    aproveitamento_peso = (peso_total / v["peso_max"]) * 100
-    viabilidade = (aproveitamento_vol * 0.6) + (aproveitamento_peso * 0.4)
+        # valida piso
+        if not cabe_no_piso_heuristica(
+            cargas_unitarias,
+            v["comprimento"],
+            v["largura"]
+        ):
+            erros.append(f"❌ {v['nome']}: Não cabe no piso.")
+            continue
 
-    resultados.append({
-        "Veículo": v["nome"],
-        "Cubagem (m³)": round(cubagem, 3),
-        "Peso Máx (kg)": v["peso_max"],
-        "Volume Total (m³)": round(vol_total, 3),
-        "Peso Total (kg)": round(peso_total, 3),
-        "Aproveitamento Volume (%)": round(aproveitamento_vol, 2),
-        "Aproveitamento Peso (%)": round(aproveitamento_peso, 2),
-        "Viabilidade (%)": round(viabilidade, 2)
-    })
+        aproveitamento_vol = (vol_total / cubagem) * 100
+        aproveitamento_peso = (peso_total / v["peso_max"]) * 100
+        viabilidade = (aproveitamento_vol * 0.6) + (aproveitamento_peso * 0.4)
+
+        resultados.append({
+            "Veículo": v["nome"],
+            "Cubagem (m³)": round(cubagem, 3),
+            "Peso Máx (kg)": v["peso_max"],
+            "Volume Total (m³)": round(vol_total, 3),
+            "Peso Total (kg)": round(peso_total, 3),
+            "Aproveitamento Volume (%)": round(aproveitamento_vol, 2),
+            "Aproveitamento Peso (%)": round(aproveitamento_peso, 2),
+            "Viabilidade (%)": round(viabilidade, 2)
+        })
 
     if not resultados:
         st.error("Nenhum veículo comporta as cargas.")
@@ -519,6 +521,7 @@ if "df_result" in locals():
     fig3d.update_layout(height=600)
 
     st.plotly_chart(fig3d, use_container_width=True)
+
 
 
 
