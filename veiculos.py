@@ -210,31 +210,72 @@ def gerar_excel_bytes(df_result, cargas):
         pd.DataFrame(cargas).to_excel(writer, index=False, sheet_name="Cargas")
     return out.getvalue()
 
-# Heurística piso
+# Heurística piso (VERSÃO CORRIGIDA)
 def cabe_no_piso_heuristica(cargas_unitarias, veh_comp, veh_larg):
-    items = sorted(cargas_unitarias, key=lambda x: x['comp'] * x['larg'], reverse=True)
+
+    # ===============================
+    # 🚀 FAST MODE — cargas iguais
+    # ===============================
+    if len(cargas_unitarias) > 50:
+
+        comp = cargas_unitarias[0]["comp"]
+        larg = cargas_unitarias[0]["larg"]
+
+        qtd_comp = int(veh_comp // comp)
+        qtd_larg = int(veh_larg // larg)
+
+        capacidade_piso = qtd_comp * qtd_larg
+
+        return capacidade_piso >= len(cargas_unitarias)
+
+    # ===============================
+    # modo heurístico original
+    # ===============================
+    items = sorted(
+        cargas_unitarias,
+        key=lambda x: x['comp'] * x['larg'],
+        reverse=True
+    )
+
     rows = []
+
     for it in items:
         placed = False
+
         for comp_i, larg_i in [(it['comp'], it['larg']), (it['larg'], it['comp'])]:
+
             if comp_i > veh_comp or larg_i > veh_larg:
                 continue
+
             for row in rows:
-                if row['used_length'] + comp_i <= veh_comp:
-                    total_width = sum(r['row_width'] for r in rows) - row['row_width'] + max(row['row_width'], larg_i)
-                    if total_width <= veh_larg:
+                if row['used_length'] + comp_i <= veh_comp + 1e-6:
+
+                    total_width = (
+                        sum(r['row_width'] for r in rows)
+                        - row['row_width']
+                        + max(row['row_width'], larg_i)
+                    )
+
+                    if total_width <= veh_larg + 1e-6:
                         row['used_length'] += comp_i
                         row['row_width'] = max(row['row_width'], larg_i)
                         placed = True
                         break
+
             if placed:
                 break
-            if sum(r['row_width'] for r in rows) + larg_i <= veh_larg:
-                rows.append({"used_length": comp_i, "row_width": larg_i})
+
+            if sum(r['row_width'] for r in rows) + larg_i <= veh_larg + 1e-6:
+                rows.append({
+                    "used_length": comp_i,
+                    "row_width": larg_i
+                })
                 placed = True
                 break
+
         if not placed:
             return False
+
     return True
 
 # ============================
@@ -488,3 +529,4 @@ if "df_result" in st.session_state:
     )
 
     st.plotly_chart(fig, use_container_width=True)
+
