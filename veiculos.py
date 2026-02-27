@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 from io import BytesIO
 import plotly.graph_objects as go
-import math
+
 
 # ============================
 # CONFIGURAÇÃO INICIAL
@@ -240,8 +240,11 @@ def cabe_no_piso_heuristica(cargas_unitarias, veh_comp, veh_larg):
 # ============================
 # BOTÃO CALCULAR
 # ============================
-if st.button("Calcular"):
+calcular = st.button("Calcular")
 
+if calcular:
+
+    # valida cargas
     if not st.session_state.cargas:
         st.warning("Adicione ao menos uma carga.")
         st.stop()
@@ -253,7 +256,6 @@ if st.button("Calcular"):
 
     df_cargas = pd.DataFrame(st.session_state.cargas)
 
-    # proteção contra dataframe vazio
     if df_cargas.empty:
         st.warning("Nenhuma carga válida.")
         st.stop()
@@ -263,15 +265,20 @@ if st.button("Calcular"):
 
     resultados = []
     erros = []
+
     cargas_unitarias = expand_cargas_unitarias(st.session_state.cargas)
 
-    # ✅ AGORA ESTÁ NO LUGAR CERTO
+    # ============================
+    # LOOP VEÍCULOS
+    # ============================
     for v in veiculos_testar:
 
+        # valida altura
         if not all(c["Altura (m)"] <= v["altura"] for c in st.session_state.cargas):
             erros.append(f"❌ {v['nome']}: Altura excedida.")
             continue
 
+        # valida piso
         if not all(
             ((c["Comprimento (m)"] <= v["comprimento"] and c["Largura (m)"] <= v["largura"]) or
              (c["Largura (m)"] <= v["comprimento"] and c["Comprimento (m)"] <= v["largura"]))
@@ -282,12 +289,10 @@ if st.button("Calcular"):
 
         cubagem = v["comprimento"] * v["largura"] * v["altura"]
 
-        # valida peso
         if peso_total > v["peso_max"]:
             erros.append(f"❌ {v['nome']}: Peso excedido.")
             continue
 
-        # valida piso
         if not cabe_no_piso_heuristica(
             cargas_unitarias,
             v["comprimento"],
@@ -315,8 +320,22 @@ if st.button("Calcular"):
         st.error("Nenhum veículo comporta as cargas.")
         st.stop()
 
-    df_result = pd.DataFrame(resultados).sort_values("Viabilidade (%)", ascending=False).reset_index(drop=True)
+    # dataframe final
+    df_result = (
+        pd.DataFrame(resultados)
+        .sort_values("Viabilidade (%)", ascending=False)
+        .reset_index(drop=True)
+    )
 
+    # salva sessão
+    st.session_state.df_result = df_result
+
+# ============================
+# MOSTRAR RESULTADOS (SÓ SE EXISTIR)
+# ============================
+if "df_result" in st.session_state:
+
+    df_result = st.session_state.df_result
     melhor = df_result.loc[0, "Veículo"]
 
     def highlight_best(row):
@@ -326,85 +345,66 @@ if st.button("Calcular"):
 
     styled = df_result.style.apply(highlight_best, axis=1)
 
-    # ✅ TABELA PRIMEIRO
+    # tabela
     st.subheader("🚛 Veículos Viáveis")
     st.dataframe(styled, use_container_width=True)
 
     st.markdown(f"### ⭐ Melhor opção: **{melhor}**")
 
-    # ✅ RESTRIÇÕES DEPOIS
-    if erros:
-        st.subheader("⚠️ Restrições encontradas")
-        for e in erros:
-            st.warning(e)
+    # ============================
+    # GRÁFICO 3D
+    # ============================
+    st.subheader("📊 Viabilidade (3D)")
 
-   # ============================
-# GRÁFICO 3D
-# ============================
-st.subheader("📊 Viabilidade (3D)")
+    fig3d = go.Figure()
 
-fig3d = go.Figure()
+    for i, row in df_result.iterrows():
 
-for i, row in df_result.iterrows():
+        altura = row["Viabilidade (%)"]
+        x = i
+        y = 0
+        z = 0
 
-    # altura da barra = viabilidade
-    altura = row["Viabilidade (%)"]
+        largura = 0.6
+        profundidade = 0.6
 
-    # posição da barra
-    x = i
-    y = 0
-    z = 0
+        fig3d.add_trace(go.Mesh3d(
+            x=[x, x+largura, x+largura, x, x, x+largura, x+largura, x],
+            y=[y, y, y+profundidade, y+profundidade, y, y, y+profundidade, y+profundidade],
+            z=[z, z, z, z, altura, altura, altura, altura],
+            opacity=0.7,
+            alphahull=0,
+            name=row["Veículo"],
+            showscale=False
+        ))
 
-    largura = 0.6
-    profundidade = 0.6
-
-    # criando um bloco 3D (cubo/barra)
-    fig3d.add_trace(go.Mesh3d(
-        x=[
-            x, x+largura, x+largura, x,
-            x, x+largura, x+largura, x
-        ],
-        y=[
-            y, y, y+profundidade, y+profundidade,
-            y, y, y+profundidade, y+profundidade
-        ],
-        z=[
-            z, z, z, z,
-            altura, altura, altura, altura
-        ],
-        opacity=0.7,
-        alphahull=0,
-        name=row["Veículo"],
-        showscale=False
-    ))
-
-fig3d.update_layout(
-    scene=dict(
-        xaxis=dict(
-            title="Veículo",
-            tickvals=list(range(len(df_result))),
-            ticktext=df_result["Veículo"]
+    fig3d.update_layout(
+        scene=dict(
+            xaxis=dict(
+                title="Veículo",
+                tickvals=list(range(len(df_result))),
+                ticktext=df_result["Veículo"]
+            ),
+            yaxis=dict(title=""),
+            zaxis=dict(title="Viabilidade (%)")
         ),
-        yaxis=dict(title=""),
-        zaxis=dict(title="Viabilidade (%)")
-    ),
-    height=650,
-    margin=dict(l=0, r=0, b=0, t=40)
-)
+        height=650,
+        margin=dict(l=0, r=0, b=0, t=40)
+    )
 
-st.plotly_chart(fig3d, use_container_width=True)
+    st.plotly_chart(fig3d, use_container_width=True)
 
-# ============================
-# DOWNLOAD EXCEL
-# ============================
-excel = gerar_excel_bytes(df_result, st.session_state.cargas)
+    # ============================
+    # DOWNLOAD EXCEL
+    # ============================
+    excel = gerar_excel_bytes(df_result, st.session_state.cargas)
 
-st.download_button(
-    "📥 Baixar Excel",
-    data=excel,
-    file_name="dimensionamento.xlsx",
-    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-)
+    st.download_button(
+        "📥 Baixar Excel",
+        data=excel,
+        file_name="dimensionamento.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
 # ==========================================================
 # 🔥 IA LOGÍSTICA AVANÇADA (ADICIONADO SEM ALTERAR O ORIGINAL)
 # ==========================================================
@@ -481,76 +481,77 @@ custos_operacionais = {
 # ============================
 # IA ESCOLHA VEÍCULO IDEAL
 # ============================
-if "df_result" in locals():
 
-    df_ia = df_result.copy()
+if "df_result" in st.session_state:
 
-    eficiencias = []
-    scores_ia = []
+    df_ia = st.session_state.df_result.copy()
 
-    for _, row in df_ia.iterrows():
+    # evita erro caso não exista resultado
+    if not df_ia.empty:
 
-        eficiencia = eficiencia_logistica(
-            row["Aproveitamento Volume (%)"],
-            row["Aproveitamento Peso (%)"]
+        eficiencias = []
+        scores_ia = []
+
+        for _, row in df_ia.iterrows():
+
+            eficiencia = eficiencia_logistica(
+                row["Aproveitamento Volume (%)"],
+                row["Aproveitamento Peso (%)"]
+            )
+
+            custo = custos_operacionais.get(row["Veículo"], 10)
+
+            # Score da IA (eficiência x custo)
+            score = (eficiencia * 0.7) - (custo * 1.3)
+
+            eficiencias.append(round(eficiencia, 2))
+            scores_ia.append(round(score, 2))
+
+        df_ia["Eficiência Logística (%)"] = eficiencias
+        df_ia["Score IA"] = scores_ia
+
+        # ordena pelo melhor score
+        df_ia = df_ia.sort_values("Score IA", ascending=False)
+
+        melhor_ia = df_ia.iloc[0]["Veículo"]
+
+        st.subheader("🧠 IA — Veículo Ideal Operacional")
+
+        # destaque visual do melhor veículo
+        def highlight_ai(row):
+            if row["Veículo"] == melhor_ia:
+                return ["background-color: #00E5FF"] * len(row)
+            return [""] * len(row)
+
+        st.dataframe(
+            df_ia.style.apply(highlight_ai, axis=1),
+            use_container_width=True
         )
 
-        custo = custos_operacionais.get(row["Veículo"], 10)
-
-        score = (eficiencia * 0.7) - (custo * 1.3)
-
-        eficiencias.append(eficiencia)
-        scores_ia.append(round(score, 2))
-
-    df_ia["Eficiência Logística (%)"] = eficiencias
-    df_ia["Score IA"] = scores_ia
-
-    df_ia = df_ia.sort_values("Score IA", ascending=False)
-
-    melhor_ia = df_ia.iloc[0]["Veículo"]
-
-    st.subheader("🧠 IA — Veículo Ideal Operacional")
-
-    def highlight_ai(row):
-        if row["Veículo"] == melhor_ia:
-            return ['background-color: #00E5FF'] * len(row)
-        return [''] * len(row)
-
-    st.dataframe(
-        df_ia.style.apply(highlight_ai, axis=1),
-        use_container_width=True
-    )
-
-    st.success(f"🚀 IA recomenda operacionalmente: **{melhor_ia}**")
-
+        st.success(f"🚀 IA recomenda operacionalmente: **{melhor_ia}**")
 
 # ============================
 # SIMULAÇÃO 3D DE OCUPAÇÃO
 # ============================
-if "df_result" in locals():
+
+if "df_result" in st.session_state:
+
+    df_result = st.session_state.df_result
 
     st.subheader("📦 Simulação 3D de Ocupação")
 
     fig3d = go.Figure()
 
     for i, row in df_result.iterrows():
-        fig3d.add_trace(go.Bar3d(
-            x=[i],
-            y=[0],
-            z=[0],
-            dx=0.5,
-            dy=0.5,
-            dz=row["Aproveitamento Volume (%)"],
+        fig3d.add_trace(go.Scatter3d(
+            x=[i, i],
+            y=[0, 0],
+            z=[0, row["Aproveitamento Volume (%)"]],
+            mode="lines",
+            line=dict(width=20),
+            showlegend=False
         ))
 
     fig3d.update_layout(height=600)
 
     st.plotly_chart(fig3d, use_container_width=True)
-
-
-
-
-
-
-
-
