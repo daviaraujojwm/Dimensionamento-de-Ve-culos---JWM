@@ -245,17 +245,17 @@ if st.button("Calcular"):
         st.warning("Adicione ao menos uma carga.")
         st.stop()
 
-    veiculos_testar = [v for v in lista_veiculos if not selecionados or v["nome"] in selecionados]
+veiculos_testar = [v for v in lista_veiculos if not selecionados or v["nome"] in selecionados]
 
-    df_cargas = pd.DataFrame(st.session_state.cargas)
-    vol_total = df_cargas["Volume total (m³)"].sum()
-    peso_total = df_cargas["Peso total (kg)"].sum()
+df_cargas = pd.DataFrame(st.session_state.cargas)
+vol_total = df_cargas["Volume total (m³)"].sum()
+peso_total = df_cargas["Peso total (kg)"].sum()
 
-    resultados = []
-    erros = []
-    cargas_unitarias = expand_cargas_unitarias(st.session_state.cargas)
+resultados = []
+erros = []
+cargas_unitarias = expand_cargas_unitarias(st.session_state.cargas)
 
-   for v in veiculos_testar:
+for v in veiculos_testar:
 
     # valida altura
     if not all(c["Altura (m)"] <= v["altura"] for c in st.session_state.cargas):
@@ -512,5 +512,6 @@ if "df_result" in locals():
     fig3d.update_layout(height=600)
 
     st.plotly_chart(fig3d, use_container_width=True)
+
 
 
