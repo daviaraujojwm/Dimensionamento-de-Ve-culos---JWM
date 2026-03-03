@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 from io import BytesIO
+import plotly.graph_objects as go
 
 
 
@@ -358,10 +359,20 @@ if calcular:
             # CONTROLE REAL DE PESO
             # ============================
             peso_aprov_real = (peso_total / peso_max) * 100
-        
+
+            # Bloqueia sobrepeso
             if peso_aprov_real > 100:
                 continue
-        
+            
+            # Penalidade de segurança
+            penalidade_peso = 0
+            
+            if peso_aprov_real > 90:
+                penalidade_peso = 40   # muito próximo do limite
+            
+            elif peso_aprov_real > 85:
+                penalidade_peso = 20   # atenção operacional
+            
             peso_aprov = round(peso_aprov_real, 2)
         
             # ============================
@@ -395,7 +406,7 @@ if calcular:
                 (aproveitamento_volume * 0.5) +
                 (peso_aprov * 0.3) +
                 (caixas_total * 0.2)
-            )
+            ) - penalidade_peso
         
             resultados.append({
                 "Veículo": veic["Veículo"],
@@ -419,45 +430,6 @@ if calcular:
     else:
         st.session_state.df_result = pd.DataFrame()
         st.warning("Nenhum veículo comporta as cargas.")
-
-
-# ============================
-# MOSTRAR RESULTADOS
-# ============================
-
-if "df_result" in st.session_state and not st.session_state.df_result.empty:
-
-    df_result = st.session_state.df_result
-    melhor = df_result.loc[0, "Veículo"]
-
-    def highlight_best(row):
-        if row["Veículo"] == melhor:
-            return ['background-color: #28FF77'] * len(row)
-        return [''] * len(row)
-
-    st.subheader("🚛 Veículos Viáveis")
-
-    st.dataframe(
-        df_result.style.apply(highlight_best, axis=1),
-        use_container_width=True
-    )
-
-    st.markdown(f"### ⭐ Melhor opção: **{melhor}**")
-
-    # ============================
-    # DOWNLOAD EXCEL
-    # ============================
-    excel = gerar_excel_bytes(
-        st.session_state.df_result,
-        st.session_state.cargas
-    )
-
-    st.download_button(
-        "📥 Baixar Excel",
-        data=excel,
-        file_name="dimensionamento.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
 
 # ==========================================================
 # 🤖 INTELIGÊNCIA LOGÍSTICA AVANÇADA
@@ -540,15 +512,23 @@ if "df_result" in st.session_state and not st.session_state.df_result.empty:
     )
 
     st.success(f"🚀 IA recomenda operacionalmente: **{melhor_ia}**")
+    
+    excel = gerar_excel_bytes(
+        st.session_state.df_result,
+        st.session_state.cargas
+)
+
+    st.download_button(
+        "📥 Baixar Excel",
+        data=excel,
+        file_name="dimensionamento.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+)
+
 # ============================
 # SIMULAÇÃO REAL DE EMPILHAMENTO
 # ============================
 
-if (
-    "df_result" in st.session_state
-    and not st.session_state.df_result.empty
-    and st.session_state.cargas
-):
 
     st.markdown("---")
     st.header("📦 Simulação Real de Empilhamento")
@@ -562,21 +542,21 @@ if (
         
     if not cargas_unitarias:
         st.stop()
-        
-        primeira = cargas_unitarias[0]
-        
-        if not all(
-            c["comp"] == primeira["comp"] and
-            c["larg"] == primeira["larg"] and
-            c["alt"] == primeira["alt"]
-            for c in cargas_unitarias
-        ):
-            st.warning("⚠️ Simulação visual disponível apenas para cargas idênticas.")
-            st.stop()
-        
-        comp_c = primeira["comp"]
-        larg_c = primeira["larg"]
-        alt_c = primeira["alt"]
+
+    primeira = cargas_unitarias[0]
+
+    if not all(
+        c["comp"] == primeira["comp"] and
+        c["larg"] == primeira["larg"] and
+        c["alt"] == primeira["alt"]
+        for c in cargas_unitarias
+    ):
+        st.warning("⚠️ Simulação visual disponível apenas para cargas idênticas.")
+        st.stop()
+
+    comp_c = primeira["comp"]
+    larg_c = primeira["larg"]
+    alt_c = primeira["alt"]
 
     # busca veículo segura
     veiculo = next(
@@ -602,13 +582,61 @@ if (
     st.write(f"📚 Camadas possíveis: {camadas}")
     st.write(f"📦 Capacidade estimada: {total_caixas}")
 
-    st.markdown("### 📐 Ocupação visual")
-
-    linhas = min(caixas_coluna, 12)
-    colunas = min(caixas_linha, 30)
-
-    for camada in range(min(camadas, 5)):
-        st.markdown(f"**Camada {camada+1}**")
-        for _ in range(linhas):
-            st.write("🟫 " * colunas)
-        st.write("---")
+    st.markdown("### 🚛 Simulação 3D — Carga Dentro do Veículo")
+    
+    fig = go.Figure()
+    
+    # ============================
+    # DESENHA O VEÍCULO (TRANSPARENTE)
+    # ============================
+    
+    fig.add_trace(go.Mesh3d(
+        x=[0, comp_v, comp_v, 0, 0, comp_v, comp_v, 0],
+        y=[0, 0, larg_v, larg_v, 0, 0, larg_v, larg_v],
+        z=[0, 0, 0, 0, alt_v, alt_v, alt_v, alt_v],
+        opacity=0.08,
+        color='blue',
+        showscale=False
+    ))
+    
+    # ============================
+    # LIMITADORES (evita travar navegador)
+    # ============================
+    
+    max_camadas = min(camadas, 5)
+    max_linhas = min(caixas_coluna, 6)
+    max_colunas = min(caixas_linha, 8)
+    
+    # ============================
+    # DESENHA AS CAIXAS
+    # ============================
+    
+    for z in range(max_camadas):
+        for y in range(max_linhas):
+            for x in range(max_colunas):
+    
+                x0 = x * comp_c
+                y0 = y * larg_c
+                z0 = z * alt_c
+    
+                fig.add_trace(go.Mesh3d(
+                    x=[x0, x0+comp_c, x0+comp_c, x0, x0, x0+comp_c, x0+comp_c, x0],
+                    y=[y0, y0, y0+larg_c, y0+larg_c, y0, y0, y0+larg_c, y0+larg_c],
+                    z=[z0, z0, z0, z0, z0+alt_c, z0+alt_c, z0+alt_c, z0+alt_c],
+                    opacity=0.6,
+                    color='brown',
+                    showscale=False
+                ))
+    
+    fig.update_layout(
+        scene=dict(
+            xaxis_title='Comprimento',
+            yaxis_title='Largura',
+            zaxis_title='Altura',
+            aspectmode='data'
+        ),
+        margin=dict(l=0, r=0, b=0, t=0),
+        height=650
+    )
+    
+    st.plotly_chart(fig, use_container_width=True)
