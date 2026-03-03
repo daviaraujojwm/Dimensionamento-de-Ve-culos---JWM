@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 from io import BytesIO
-import plotly.graph_objects as go
+
 
 
 # ============================
@@ -50,6 +50,21 @@ lista_veiculos = [
     {"nome": "Carreta Grade Baixa", "largura": 2.400, "comprimento": 12.400, "altura": 2.700, "peso_max": 24000},
     {"nome": "Wanderleia Carga Seca", "largura": 2.400, "comprimento": 14.400, "altura": 2.700, "peso_max": 27000}
 ]
+
+# ============================
+# DATAFRAME DE VEÍCULOS (ESSENCIAL)
+# ============================
+df_veiculos = pd.DataFrame(lista_veiculos)
+
+# cálculo automático da cubagem do veículo
+df_veiculos["Capacidade Volume (m³)"] = (
+    df_veiculos["largura"]
+    * df_veiculos["comprimento"]
+    * df_veiculos["altura"]
+)
+
+# padroniza nome da coluna usada no cálculo
+df_veiculos.rename(columns={"nome": "Veículo"}, inplace=True)
 
 # ============================
 # SESSION STATE
@@ -181,7 +196,7 @@ else:
 # ============================
 # SELEÇÃO DE VEÍCULOS
 # ============================
-todos_nomes = [v["nome"] for v in lista_veiculos]
+todos_nomes = df_veiculos["Veículo"].tolist()
 
 selecionados = st.multiselect(
     "🚛 Selecione veículos específicos (ou deixe vazio para testar todos):",
@@ -211,22 +226,30 @@ def gerar_excel_bytes(df_result, cargas):
     return out.getvalue()
 
 # Heurística piso (VERSÃO CORRIGIDA)
-def cabe_no_piso_heuristica(cargas_unitarias, veh_comp, veh_larg):
+def cabe_no_piso_heuristica(cargas_unitarias, veh_comp, veh_larg, veh_alt):
 
     # ===============================
-    # 🚀 FAST MODE — cargas iguais
+    # FAST MODE — muitas caixas iguais
     # ===============================
     if len(cargas_unitarias) > 50:
 
         comp = cargas_unitarias[0]["comp"]
         larg = cargas_unitarias[0]["larg"]
+        alt = cargas_unitarias[0]["alt"]
 
         qtd_comp = int(veh_comp // comp)
         qtd_larg = int(veh_larg // larg)
 
-        capacidade_piso = qtd_comp * qtd_larg
+        caixas_por_camada = qtd_comp * qtd_larg
 
-        return capacidade_piso >= len(cargas_unitarias)
+        if caixas_por_camada == 0:
+            return False
+
+        camadas = int(veh_alt // alt)
+
+        capacidade_total = caixas_por_camada * camadas
+
+        return capacidade_total >= len(cargas_unitarias)
 
     # ===============================
     # modo heurístico original
@@ -278,103 +301,131 @@ def cabe_no_piso_heuristica(cargas_unitarias, veh_comp, veh_larg):
 
     return True
 
+
 # ============================
 # BOTÃO CALCULAR
 # ============================
-calcular = st.button("Calcular")
+calcular = st.button("🚀 Calcular Dimensionamento")
 
 if calcular:
 
-    # valida cargas
     if not st.session_state.cargas:
-        st.warning("Adicione ao menos uma carga.")
+        st.warning("Adicione pelo menos uma carga.")
         st.stop()
-
-    veiculos_testar = [
-        v for v in lista_veiculos
-        if not selecionados or v["nome"] in selecionados
-    ]
-
-    df_cargas = pd.DataFrame(st.session_state.cargas)
-
-    if df_cargas.empty:
-        st.warning("Nenhuma carga válida.")
-        st.stop()
-
-    vol_total = df_cargas["Volume total (m³)"].sum()
-    peso_total = df_cargas["Peso total (kg)"].sum()
-
-    resultados = []
-    erros = []
 
     cargas_unitarias = expand_cargas_unitarias(st.session_state.cargas)
+
+    resultados = []
+
+    if selecionados:
+        df_testar = df_veiculos[df_veiculos["Veículo"].isin(selecionados)]
+    else:
+        df_testar = df_veiculos
+
+    volume_total_carga = sum(
+        c["comp"] * c["larg"] * c["alt"]
+        for c in cargas_unitarias
+    )
+
+    peso_total = sum(c["peso"] for c in cargas_unitarias)
 
     # ============================
     # LOOP VEÍCULOS
     # ============================
-    for v in veiculos_testar:
+    for _, veic in df_testar.iterrows():
 
-        # valida altura
-        if not all(c["Altura (m)"] <= v["altura"] for c in st.session_state.cargas):
-            erros.append(f"❌ {v['nome']}: Altura excedida.")
-            continue
-
-        # valida piso
-        if not all(
-            ((c["Comprimento (m)"] <= v["comprimento"] and c["Largura (m)"] <= v["largura"]) or
-             (c["Largura (m)"] <= v["comprimento"] and c["Comprimento (m)"] <= v["largura"]))
-            for c in st.session_state.cargas
-        ):
-            erros.append(f"❌ {v['nome']}: Item maior que o piso.")
-            continue
-
-        cubagem = v["comprimento"] * v["largura"] * v["altura"]
-
-        if peso_total > v["peso_max"]:
-            erros.append(f"❌ {v['nome']}: Peso excedido.")
-            continue
-
-        if not cabe_no_piso_heuristica(
-            cargas_unitarias,
-            v["comprimento"],
-            v["largura"]
-        ):
-            erros.append(f"❌ {v['nome']}: Não cabe no piso.")
-            continue
-
-        aproveitamento_vol = (vol_total / cubagem) * 100
-        aproveitamento_peso = (peso_total / v["peso_max"]) * 100
-        viabilidade = (aproveitamento_vol * 0.6) + (aproveitamento_peso * 0.4)
-
-        resultados.append({
-            "Veículo": v["nome"],
-            "Cubagem (m³)": round(cubagem, 3),
-            "Peso Máx (kg)": v["peso_max"],
-            "Volume Total (m³)": round(vol_total, 3),
-            "Peso Total (kg)": round(peso_total, 3),
-            "Aproveitamento Volume (%)": round(aproveitamento_vol, 2),
-            "Aproveitamento Peso (%)": round(aproveitamento_peso, 2),
-            "Viabilidade (%)": round(viabilidade, 2)
+            # ============================
+            # DADOS DO VEÍCULO
+            # ============================
+            comp_v = veic["comprimento"]
+            larg_v = veic["largura"]
+            alt_v  = veic["altura"]
+            peso_max = veic["peso_max"]
+        
+            volume_veiculo = comp_v * larg_v * alt_v
+        
+            # ============================
+            # CONTROLE REAL DE VOLUME
+            # ============================
+            aproveitamento_volume_real = volume_total_carga / volume_veiculo
+        
+            if aproveitamento_volume_real > 1:
+                continue
+        
+            aproveitamento_volume = round(aproveitamento_volume_real * 100, 2)
+        
+            # ============================
+            # CONTROLE REAL DE PESO
+            # ============================
+            peso_aprov_real = (peso_total / peso_max) * 100
+        
+            if peso_aprov_real > 100:
+                continue
+        
+            peso_aprov = round(peso_aprov_real, 2)
+        
+            # ============================
+            # SIMULAÇÃO SIMPLIFICADA DE EMPILHAMENTO
+            # ============================
+        
+            caixas_total = 0
+                
+            for carga in cargas_unitarias:
+                
+                comp_c = carga["comp"]
+                larg_c = carga["larg"]
+                alt_c  = carga["alt"]
+                
+                qtd_comprimento = int(comp_v // comp_c)
+                qtd_largura     = int(larg_v // larg_c)
+                
+                caixas_por_camada = qtd_comprimento * qtd_largura
+                camadas = int(alt_v // alt_c)
+                
+                capacidade_total = caixas_por_camada * camadas
+                
+                if capacidade_total > 0:
+                    caixas_total += 1
+        
+            # ============================
+            # HEURÍSTICA FINAL
+            # ============================
+        
+            score = (
+                (aproveitamento_volume * 0.5) +
+                (peso_aprov * 0.3) +
+                (caixas_total * 0.2)
+            )
+        
+            resultados.append({
+                "Veículo": veic["Veículo"],
+                "Aproveitamento Volume (%)": aproveitamento_volume,
+                "Aproveitamento Peso (%)": peso_aprov,
+                "Caixas Alocadas": caixas_total,
+                "Score": round(score, 2)
         })
+    # ============================
+    # CRIA DATAFRAME FINAL (FORA DO LOOP)
+    # ============================
+    if resultados:
+        df_result = pd.DataFrame(resultados)
 
-    if not resultados:
-        st.error("Nenhum veículo comporta as cargas.")
-        st.stop()
+        df_result = df_result.sort_values(
+            "Aproveitamento Volume (%)",
+            ascending=False
+        ).reset_index(drop=True)
 
-    # dataframe final
-    df_result = (
-        pd.DataFrame(resultados)
-        .sort_values("Viabilidade (%)", ascending=False)
-        .reset_index(drop=True)
-    )
+        st.session_state.df_result = df_result
+    else:
+        st.session_state.df_result = pd.DataFrame()
+        st.warning("Nenhum veículo comporta as cargas.")
 
-    # salva sessão
-    st.session_state.df_result = df_result
 
 # ============================
 # MOSTRAR RESULTADOS
 # ============================
-if "df_result" in st.session_state:
+
+if "df_result" in st.session_state and not st.session_state.df_result.empty:
 
     df_result = st.session_state.df_result
     melhor = df_result.loc[0, "Veículo"]
@@ -385,6 +436,7 @@ if "df_result" in st.session_state:
         return [''] * len(row)
 
     st.subheader("🚛 Veículos Viáveis")
+
     st.dataframe(
         df_result.style.apply(highlight_best, axis=1),
         use_container_width=True
@@ -395,7 +447,10 @@ if "df_result" in st.session_state:
     # ============================
     # DOWNLOAD EXCEL
     # ============================
-    excel = gerar_excel_bytes(df_result, st.session_state.cargas)
+    excel = gerar_excel_bytes(
+        st.session_state.df_result,
+        st.session_state.cargas
+    )
 
     st.download_button(
         "📥 Baixar Excel",
@@ -408,125 +463,152 @@ if "df_result" in st.session_state:
 # 🤖 INTELIGÊNCIA LOGÍSTICA AVANÇADA
 # ==========================================================
 
-st.markdown("---")
-st.header("🤖 Inteligência Logística Avançada")
+if "df_result" in st.session_state and not st.session_state.df_result.empty:
 
-def eficiencia_logistica(vol_aprov, peso_aprov):
-    ocupacao_media = (vol_aprov + peso_aprov) / 2
-    penalidade = max(0, 100 - ocupacao_media) * 0.15
-    eficiencia = ocupacao_media - penalidade
-    return max(0, round(eficiencia, 2))
-
-custos_operacionais = {
-    "Fiorino": 1.2, "Van Utilitário": 1.4,
-    "HR Baú": 2.0, "HR Aberto": 2.0,
-    "Veículo 3/4 Aberto": 3.0, "Veículo 3/4 Baú": 3.2,
-    "Toco Aberto": 4.5, "Toco Baú": 4.8,
-    "VUC Baú": 3.5,
-    "Truck Aberto": 6.5, "Truck Baú": 7.0,
-    "Bi-Truck Aberto": 8.0, "Bi-Truck Baú": 8.5,
-    "Carreta Sider": 10.0,
-    "Carreta Wanderleia": 11.0,
-    "Carreta Wanderleia Aberta": 13.0,
-    "Carreta Wanderleia Sider": 12.5,
-    "Carreta Rodo Trem": 18.0,
-    "Bitruck Sider": 9.0,
-    "Carreta Grade Baixa": 11.5,
-    "Wanderleia Carga Seca": 10.5,
-}
-
-# ============================
-# IA VEÍCULO IDEAL
-# ============================
-
-if "df_result" in st.session_state:
+    st.markdown("---")
+    st.header("🤖 Inteligência Logística Avançada")
 
     df_ia = st.session_state.df_result.copy()
 
-    if not df_ia.empty:
+    def eficiencia_logistica(vol_aprov, peso_aprov):
+        ocupacao_media = (vol_aprov + peso_aprov) / 2
+        penalidade = max(0, 100 - ocupacao_media) * 0.15
+        eficiencia = ocupacao_media - penalidade
+        return max(0, round(eficiencia, 2))
 
-        eficiencias = []
-        scores = []
+    custos_operacionais = {
+        "Fiorino": 1.2,
+        "Van Utilitário": 1.4,
+        "HR Baú": 2.0,
+        "HR Aberto": 2.1,
+        "Veículo 3/4 Aberto": 3.5,
+        "Veículo 3/4 Baú": 3.8,
+        "Toco Aberto": 4.5,
+        "Toco Baú": 4.8,
+        "VUC Baú": 3.0,
+        "Truck Aberto": 7.5,
+        "Truck Baú": 7.0,
+        "Bi-Truck Aberto": 9.0,
+        "Bi-Truck Baú": 9.5,
+        "Carreta Sider": 10.0,
+        "Carreta Wanderleia": 11.0,
+        "Carreta Wanderleia Aberta": 12.5,
+        "Carreta Wanderleia Sider": 12.0,
+        "Carreta Rodo Trem": 15.0,
+        "Bitruck Sider": 9.8,
+        "Carreta Grade Baixa": 10.5,
+        "Wanderleia Carga Seca": 11.5,
+    }
 
-        for _, row in df_ia.iterrows():
+    eficiencias = []
+    scores = []
 
-            eficiencia = eficiencia_logistica(
-                row["Aproveitamento Volume (%)"],
-                row["Aproveitamento Peso (%)"]
-            )
+    for _, row in df_ia.iterrows():
 
-            custo = custos_operacionais.get(row["Veículo"], 10)
-            score = (eficiencia * 0.7) - (custo * 1.3)
+        vol_aprov = row["Aproveitamento Volume (%)"]
+        peso_aprov = row["Aproveitamento Peso (%)"]
 
-            eficiencias.append(eficiencia)
-            scores.append(round(score, 2))
-
-        df_ia["Eficiência Logística (%)"] = eficiencias
-        df_ia["Score IA"] = scores
-
-        df_ia = df_ia.sort_values("Score IA", ascending=False)
-
-        melhor_ia = df_ia.iloc[0]["Veículo"]
-
-        st.subheader("🧠 IA — Veículo Ideal Operacional")
-
-        def highlight_ai(row):
-            if row["Veículo"] == melhor_ia:
-                return ["background-color: #00E5FF"] * len(row)
-            return [""] * len(row)
-
-        st.dataframe(
-            df_ia.style.apply(highlight_ai, axis=1),
-            use_container_width=True
+        eficiencia = eficiencia_logistica(
+            vol_aprov,
+            peso_aprov
         )
 
-        st.success(f"🚀 IA recomenda operacionalmente: **{melhor_ia}**")
+        custo = custos_operacionais.get(row["Veículo"], 10)
 
-# ============================
-# 📦 SIMULAÇÃO DE OCUPAÇÃO
-# ============================
+        score = (eficiencia * 0.7) - (custo * 1.3)
 
-if "df_result" in st.session_state:
+        eficiencias.append(eficiencia)
+        scores.append(round(score, 2))
 
-    st.subheader("📦 Simulação de Ocupação do Veículo")
+    df_ia["Eficiência Logística (%)"] = eficiencias
+    df_ia["Score IA"] = scores
 
-    melhor = st.session_state.df_result.iloc[0]
+    df_ia = df_ia.sort_values("Score IA", ascending=False)
 
-    ocupacao = melhor["Aproveitamento Volume (%)"]
+    melhor_ia = df_ia.iloc[0]["Veículo"]
 
-    fig = go.Figure()
+    def highlight_ai(row):
+        if row["Veículo"] == melhor_ia:
+            return ["background-color: #00E5FF"] * len(row)
+        return [""] * len(row)
 
-    # Base do caminhão (baú)
-    fig.add_trace(go.Mesh3d(
-        x=[0,10,10,0,0,10,10,0],
-        y=[0,0,4,4,0,0,4,4],
-        z=[0,0,0,0,5,5,5,5],
-        opacity=0.15,
-        color="gray",
-        name="Baú"
-    ))
+    st.subheader("🧠 IA — Veículo Ideal Operacional")
 
-    # Volume ocupado
-    altura_ocupada = 5 * (ocupacao / 100)
-
-    fig.add_trace(go.Mesh3d(
-        x=[0,10,10,0,0,10,10,0],
-        y=[0,0,4,4,0,0,4,4],
-        z=[0,0,0,0,altura_ocupada,altura_ocupada,altura_ocupada,altura_ocupada],
-        opacity=0.7,
-        color="green",
-        name="Carga"
-    ))
-
-    fig.update_layout(
-        scene=dict(
-            xaxis_visible=False,
-            yaxis_visible=False,
-            zaxis_title="Ocupação (%)"
-        ),
-        height=500,
-        margin=dict(l=0, r=0, b=0, t=30)
+    st.dataframe(
+        df_ia.style.apply(highlight_ai, axis=1),
+        use_container_width=True
     )
 
-    st.plotly_chart(fig, use_container_width=True)
+    st.success(f"🚀 IA recomenda operacionalmente: **{melhor_ia}**")
+# ============================
+# SIMULAÇÃO REAL DE EMPILHAMENTO
+# ============================
 
+if (
+    "df_result" in st.session_state
+    and not st.session_state.df_result.empty
+    and st.session_state.cargas
+):
+
+    st.markdown("---")
+    st.header("📦 Simulação Real de Empilhamento")
+
+    melhor = st.session_state.df_result.loc[0, "Veículo"]
+
+    st.write(f"🚛 Veículo simulado: **{melhor}**")
+
+    # cargas expandidas
+    cargas_unitarias = expand_cargas_unitarias(st.session_state.cargas)
+        
+    if not cargas_unitarias:
+        st.stop()
+        
+        primeira = cargas_unitarias[0]
+        
+        if not all(
+            c["comp"] == primeira["comp"] and
+            c["larg"] == primeira["larg"] and
+            c["alt"] == primeira["alt"]
+            for c in cargas_unitarias
+        ):
+            st.warning("⚠️ Simulação visual disponível apenas para cargas idênticas.")
+            st.stop()
+        
+        comp_c = primeira["comp"]
+        larg_c = primeira["larg"]
+        alt_c = primeira["alt"]
+
+    # busca veículo segura
+    veiculo = next(
+        (v for v in lista_veiculos if v["nome"] == melhor),
+        None
+    )
+
+    if veiculo is None:
+        st.error("Veículo não encontrado.")
+        st.stop()
+
+    comp_v = veiculo["comprimento"]
+    larg_v = veiculo["largura"]
+    alt_v = veiculo["altura"]
+
+    caixas_linha = int(comp_v // comp_c)
+    caixas_coluna = int(larg_v // larg_c)
+    camadas = int(alt_v // alt_c)
+
+    total_caixas = caixas_linha * caixas_coluna * camadas
+
+    st.write(f"📦 Caixas por camada: {caixas_linha * caixas_coluna}")
+    st.write(f"📚 Camadas possíveis: {camadas}")
+    st.write(f"📦 Capacidade estimada: {total_caixas}")
+
+    st.markdown("### 📐 Ocupação visual")
+
+    linhas = min(caixas_coluna, 12)
+    colunas = min(caixas_linha, 30)
+
+    for camada in range(min(camadas, 5)):
+        st.markdown(f"**Camada {camada+1}**")
+        for _ in range(linhas):
+            st.write("🟫 " * colunas)
+        st.write("---")
