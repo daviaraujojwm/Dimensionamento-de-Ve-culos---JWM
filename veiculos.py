@@ -432,86 +432,44 @@ if calcular:
         st.warning("Nenhum veículo comporta as cargas.")
 
 # ==========================================================
-# 🤖 INTELIGÊNCIA LOGÍSTICA AVANÇADA
+# 🚛 VEÍCULO IDEAL OPERACIONAL REAL
 # ==========================================================
 
 if "df_result" in st.session_state and not st.session_state.df_result.empty:
 
     st.markdown("---")
-    st.header("🤖 Inteligência Logística Avançada")
+    st.header("🚛 Veículo Ideal Operacional")
 
-    df_ia = st.session_state.df_result.copy()
+    df_base = st.session_state.df_result.copy()
 
-    def eficiencia_logistica(vol_aprov, peso_aprov):
-        ocupacao_media = (vol_aprov + peso_aprov) / 2
-        penalidade = max(0, 100 - ocupacao_media) * 0.15
-        eficiencia = ocupacao_media - penalidade
-        return max(0, round(eficiencia, 2))
+    # Filtra veículos que realmente suportam peso e volume
+    df_viaveis = df_base[
+        (df_base["Aproveitamento Volume (%)"] <= 100) &
+        (df_base["Aproveitamento Peso (%)"] <= 100)
+    ].copy()
 
-    custos_operacionais = {
-        "Fiorino": 1.2,
-        "Van Utilitário": 1.4,
-        "HR Baú": 2.0,
-        "HR Aberto": 2.1,
-        "Veículo 3/4 Aberto": 3.5,
-        "Veículo 3/4 Baú": 3.8,
-        "Toco Aberto": 4.5,
-        "Toco Baú": 4.8,
-        "VUC Baú": 3.0,
-        "Truck Aberto": 7.5,
-        "Truck Baú": 7.0,
-        "Bi-Truck Aberto": 9.0,
-        "Bi-Truck Baú": 9.5,
-        "Carreta Sider": 10.0,
-        "Carreta Wanderleia": 11.0,
-        "Carreta Wanderleia Aberta": 12.5,
-        "Carreta Wanderleia Sider": 12.0,
-        "Carreta Rodo Trem": 15.0,
-        "Bitruck Sider": 9.8,
-        "Carreta Grade Baixa": 10.5,
-        "Wanderleia Carga Seca": 11.5,
-    }
+    if not df_viaveis.empty:
 
-    eficiencias = []
-    scores = []
-
-    for _, row in df_ia.iterrows():
-
-        vol_aprov = row["Aproveitamento Volume (%)"]
-        peso_aprov = row["Aproveitamento Peso (%)"]
-
-        eficiencia = eficiencia_logistica(
-            vol_aprov,
-            peso_aprov
+        # Junta com volume real do veículo
+        df_viaveis = df_viaveis.merge(
+            df_veiculos[["Veículo", "Capacidade Volume (m³)"]],
+            on="Veículo",
+            how="left"
         )
 
-        custo = custos_operacionais.get(row["Veículo"], 10)
+        # Ordena pelo menor volume do veículo
+        df_viaveis = df_viaveis.sort_values(
+            "Capacidade Volume (m³)"
+        )
 
-        score = (eficiencia * 0.7) - (custo * 1.3)
+        melhor_veiculo = df_viaveis.iloc[0]["Veículo"]
 
-        eficiencias.append(eficiencia)
-        scores.append(round(score, 2))
+        st.dataframe(df_viaveis, use_container_width=True)
 
-    df_ia["Eficiência Logística (%)"] = eficiencias
-    df_ia["Score IA"] = scores
+        st.success(f"🚀 Veículo ideal operacional: **{melhor_veiculo}**")
 
-    df_ia = df_ia.sort_values("Score IA", ascending=False)
-
-    melhor_ia = df_ia.iloc[0]["Veículo"]
-
-    def highlight_ai(row):
-        if row["Veículo"] == melhor_ia:
-            return ["background-color: #00E5FF"] * len(row)
-        return [""] * len(row)
-
-    st.subheader("🧠 IA — Veículo Ideal Operacional")
-
-    st.dataframe(
-        df_ia.style.apply(highlight_ai, axis=1),
-        use_container_width=True
-    )
-
-    st.success(f"🚀 IA recomenda operacionalmente: **{melhor_ia}**")
+    else:
+        st.error("❌ Nenhum veículo suporta essa carga.")
     
     excel = gerar_excel_bytes(
         st.session_state.df_result,
@@ -525,118 +483,140 @@ if "df_result" in st.session_state and not st.session_state.df_result.empty:
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 )
 
-# ============================
-# SIMULAÇÃO REAL DE EMPILHAMENTO
-# ============================
+# ==========================================================
+# 📦 SIMULAÇÃO REAL DE EMPILHAMENTO (VERSÃO FINAL AJUSTADA)
+# ==========================================================
 
+if st.button("🔍 Simular Empilhamento"):
 
-    st.markdown("---")
-    st.header("📦 Simulação Real de Empilhamento")
-
-    melhor = st.session_state.df_result.loc[0, "Veículo"]
-
-    st.write(f"🚛 Veículo simulado: **{melhor}**")
-
-    # cargas expandidas
-    cargas_unitarias = expand_cargas_unitarias(st.session_state.cargas)
-        
-    if not cargas_unitarias:
+    if "df_result" not in st.session_state:
+        st.error("Execute o cálculo primeiro.")
         st.stop()
 
-    primeira = cargas_unitarias[0]
+    df_base = st.session_state.df_result.copy()
 
-    if not all(
-        c["comp"] == primeira["comp"] and
-        c["larg"] == primeira["larg"] and
-        c["alt"] == primeira["alt"]
-        for c in cargas_unitarias
-    ):
-        st.warning("⚠️ Simulação visual disponível apenas para cargas idênticas.")
+    # ------------------------------------------------------
+    # 1️⃣ FILTRA VEÍCULOS VIÁVEIS
+    # ------------------------------------------------------
+
+    df_viaveis = df_base[
+        (df_base["Aproveitamento Volume (%)"] <= 100) &
+        (df_base["Aproveitamento Peso (%)"] <= 100)
+    ].copy()
+
+    if df_viaveis.empty:
+        st.error("❌ Nenhum veículo suporta essa carga.")
         st.stop()
 
-    comp_c = primeira["comp"]
-    larg_c = primeira["larg"]
-    alt_c = primeira["alt"]
-
-    # busca veículo segura
-    veiculo = next(
-        (v for v in lista_veiculos if v["nome"] == melhor),
-        None
+    # Junta volume real do veículo
+    df_viaveis = df_viaveis.merge(
+        df_veiculos[["Veículo", "Capacidade Volume (m³)",
+                     "Comprimento (m)", "Largura (m)", "Altura (m)"]],
+        on="Veículo",
+        how="left"
     )
 
-    if veiculo is None:
-        st.error("Veículo não encontrado.")
+    # Ordena pelo menor volume (VEÍCULO IDEAL)
+    df_viaveis = df_viaveis.sort_values("Capacidade Volume (m³)")
+
+    veiculo_simulado = df_viaveis.iloc[0]
+
+    st.success(f"🚛 Veículo ideal selecionado automaticamente: {veiculo_simulado['Veículo']}")
+
+    # ------------------------------------------------------
+    # 2️⃣ DADOS DO VEÍCULO
+    # ------------------------------------------------------
+
+    comp_veic = veiculo_simulado["Comprimento (m)"]
+    larg_veic = veiculo_simulado["Largura (m)"]
+    alt_veic  = veiculo_simulado["Altura (m)"]
+
+    # ------------------------------------------------------
+    # 3️⃣ DADOS DA CARGA
+    # ------------------------------------------------------
+
+    comp_cx = comprimento
+    larg_cx = largura
+    alt_cx  = altura
+    qtd_total = quantidade
+
+    # ------------------------------------------------------
+    # 4️⃣ CÁLCULO DE EMPILHAMENTO REAL
+    # ------------------------------------------------------
+
+    qtd_comp = int(comp_veic // comp_cx)
+    qtd_larg = int(larg_veic // larg_cx)
+    qtd_alt  = int(alt_veic // alt_cx)
+
+    capacidade_total = qtd_comp * qtd_larg * qtd_alt
+
+    st.write("### 📊 Capacidade Real de Empilhamento")
+    st.write(f"Caixas no comprimento: {qtd_comp}")
+    st.write(f"Caixas na largura: {qtd_larg}")
+    st.write(f"Caixas na altura: {qtd_alt}")
+    st.write(f"Capacidade máxima: {capacidade_total} caixas")
+    st.write(f"Carga solicitada: {qtd_total} caixas")
+
+    if qtd_total > capacidade_total:
+        st.error("⚠️ A quantidade NÃO cabe fisicamente no veículo.")
         st.stop()
+    else:
+        st.success("✅ A carga cabe fisicamente no veículo.")
 
-    comp_v = veiculo["comprimento"]
-    larg_v = veiculo["largura"]
-    alt_v = veiculo["altura"]
+    # ------------------------------------------------------
+    # 5️⃣ VISUALIZAÇÃO 3D REAL
+    # ------------------------------------------------------
 
-    caixas_linha = int(comp_v // comp_c)
-    caixas_coluna = int(larg_v // larg_c)
-    camadas = int(alt_v // alt_c)
+    import plotly.graph_objects as go
 
-    total_caixas = caixas_linha * caixas_coluna * camadas
-
-    st.write(f"📦 Caixas por camada: {caixas_linha * caixas_coluna}")
-    st.write(f"📚 Camadas possíveis: {camadas}")
-    st.write(f"📦 Capacidade estimada: {total_caixas}")
-
-    st.markdown("### 🚛 Simulação 3D — Carga Dentro do Veículo")
-    
     fig = go.Figure()
-    
-    # ============================
-    # DESENHA O VEÍCULO (TRANSPARENTE)
-    # ============================
-    
-    fig.add_trace(go.Mesh3d(
-        x=[0, comp_v, comp_v, 0, 0, comp_v, comp_v, 0],
-        y=[0, 0, larg_v, larg_v, 0, 0, larg_v, larg_v],
-        z=[0, 0, 0, 0, alt_v, alt_v, alt_v, alt_v],
-        opacity=0.08,
-        color='blue',
-        showscale=False
-    ))
-    
-    # ============================
-    # LIMITADORES (evita travar navegador)
-    # ============================
-    
-    max_camadas = min(camadas, 5)
-    max_linhas = min(caixas_coluna, 6)
-    max_colunas = min(caixas_linha, 8)
-    
-    # ============================
-    # DESENHA AS CAIXAS
-    # ============================
-    
-    for z in range(max_camadas):
-        for y in range(max_linhas):
-            for x in range(max_colunas):
-    
-                x0 = x * comp_c
-                y0 = y * larg_c
-                z0 = z * alt_c
-    
+
+    contador = 0
+
+    for i in range(qtd_comp):
+        for j in range(qtd_larg):
+            for k in range(qtd_alt):
+
+                if contador >= qtd_total:
+                    break
+
+                x0 = i * comp_cx
+                y0 = j * larg_cx
+                z0 = k * alt_cx
+
                 fig.add_trace(go.Mesh3d(
-                    x=[x0, x0+comp_c, x0+comp_c, x0, x0, x0+comp_c, x0+comp_c, x0],
-                    y=[y0, y0, y0+larg_c, y0+larg_c, y0, y0, y0+larg_c, y0+larg_c],
-                    z=[z0, z0, z0, z0, z0+alt_c, z0+alt_c, z0+alt_c, z0+alt_c],
-                    opacity=0.6,
-                    color='brown',
+                    x=[x0, x0+comp_cx, x0+comp_cx, x0,
+                       x0, x0+comp_cx, x0+comp_cx, x0],
+                    y=[y0, y0, y0+larg_cx, y0+larg_cx,
+                       y0, y0, y0+larg_cx, y0+larg_cx],
+                    z=[z0, z0, z0, z0,
+                       z0+alt_cx, z0+alt_cx, z0+alt_cx, z0+alt_cx],
+                    opacity=0.5,
+                    color='blue',
                     showscale=False
                 ))
-    
+
+                contador += 1
+
+    # Estrutura do veículo (caixa externa)
+    fig.add_trace(go.Mesh3d(
+        x=[0, comp_veic, comp_veic, 0, 0, comp_veic, comp_veic, 0],
+        y=[0, 0, larg_veic, larg_veic, 0, 0, larg_veic, larg_veic],
+        z=[0, 0, 0, 0, alt_veic, alt_veic, alt_veic, alt_veic],
+        opacity=0.1,
+        color='gray',
+        showscale=False
+    ))
+
     fig.update_layout(
+        title="Simulação 3D de Empilhamento Real",
         scene=dict(
-            xaxis_title='Comprimento',
-            yaxis_title='Largura',
-            zaxis_title='Altura',
-            aspectmode='data'
+            xaxis_title="Comprimento",
+            yaxis_title="Largura",
+            zaxis_title="Altura"
         ),
-        margin=dict(l=0, r=0, b=0, t=0),
-        height=650
+        height=700
     )
-    
+
     st.plotly_chart(fig, use_container_width=True)
+
