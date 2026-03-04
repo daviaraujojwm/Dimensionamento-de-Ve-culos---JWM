@@ -232,12 +232,72 @@ def expand_cargas_unitarias(cargas):
             })
     return lista
 
+# ============================
+# EXPORTAR RESULTADOS PARA EXCEL
+# ============================
+
 def gerar_excel_bytes(df_result, cargas):
+
+    from io import BytesIO
+    import pandas as pd
+
     out = BytesIO()
+
     with pd.ExcelWriter(out, engine="openpyxl") as writer:
-        df_result.to_excel(writer, index=False, sheet_name="Resultado")
-        pd.DataFrame(cargas).to_excel(writer, index=False, sheet_name="Cargas")
-    return out.getvalue()
+
+        # Aba de Resultados
+        if df_result is not None and not df_result.empty:
+            df_result.to_excel(
+                writer,
+                sheet_name="Resultados",
+                index=False
+            )
+        else:
+            pd.DataFrame({
+                "Aviso": ["Sem dados disponíveis para exportação"]
+            }).to_excel(
+                writer,
+                sheet_name="Resultados",
+                index=False
+            )
+
+        # Aba de Cargas (se existir)
+        if cargas is not None and len(cargas) > 0:
+            df_cargas = pd.DataFrame(cargas)
+            df_cargas.to_excel(
+                writer,
+                sheet_name="Cargas",
+                index=False
+            )
+
+    out.seek(0)
+    return out
+
+
+# ============================
+# BOTÃO DE DOWNLOAD
+# ============================
+
+if (
+    "df_result" in st.session_state
+    and st.session_state.df_result is not None
+    and not st.session_state.df_result.empty
+):
+
+    excel = gerar_excel_bytes(
+        st.session_state.df_result,
+        st.session_state.get("cargas", [])
+    )
+
+    st.download_button(
+        label="📥 Baixar Excel",
+        data=excel,
+        file_name="dimensionamento_veiculos.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+
+else:
+    st.warning("⚠ Execute a simulação antes de exportar o Excel.")
 
 # Heurística piso (VERSÃO CORRIGIDA)
 def cabe_no_piso_heuristica(cargas_unitarias, veh_comp, veh_larg, veh_alt):
@@ -389,25 +449,20 @@ if calcular:
             peso_aprov = round(peso_aprov_real, 2)
         
             # ============================
-            # SIMULAÇÃO SIMPLIFICADA DE EMPILHAMENTO
+            # VERIFICAÇÃO REAL DE EMPILHAMENTO (HEURÍSTICA)
             # ============================
             
-            # Considera a primeira carga como padrão
-            comp_c = cargas_unitarias[0]["comp"]
-            larg_c = cargas_unitarias[0]["larg"]
-            alt_c  = cargas_unitarias[0]["alt"]
+            cabe = cabe_no_piso_heuristica(
+                cargas_unitarias,
+                comp_v,
+                larg_v,
+                alt_v
+            )
             
-            qtd_comp = int(comp_v // comp_c)
-            qtd_larg = int(larg_v // larg_c)
-            qtd_alt  = int(alt_v  // alt_c)
-            
-            capacidade_total = qtd_comp * qtd_larg * qtd_alt
-            
-            # Se não couber fisicamente, elimina o veículo
-            if capacidade_total < len(cargas_unitarias):
+            if not cabe:
                 continue
             
-            caixas_total = capacidade_total
+            caixas_total = len(cargas_unitarias)
         
             # ============================
             # HEURÍSTICA FINAL
@@ -482,18 +537,6 @@ if st.session_state.df_result is not None and not st.session_state.df_result.emp
 
 else:
     st.error("❌ Nenhum veículo comporta essa carga fisicamente.")
-    
-    excel = gerar_excel_bytes(
-        st.session_state.df_result,
-        st.session_state.cargas
-)
-
-    st.download_button(
-        "📥 Baixar Excel",
-        data=excel,
-        file_name="dimensionamento.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-)
 
 # ==========================================================
 # 📦 SIMULAÇÃO REAL DE EMPILHAMENTO (VERSÃO FINAL AJUSTADA)
@@ -534,7 +577,10 @@ if st.button("🔍 Simular Empilhamento"):
     )
 
     # Ordena pelo menor volume (VEÍCULO IDEAL)
-    df_viaveis = df_viaveis.sort_values("Capacidade Volume (m³)")
+    df_viaveis = df_viaveis.sort_values(
+        ["Capacidade Volume (m³)", "Aproveitamento Peso (%)"],
+        ascending=[True, False]
+    )
 
     veiculo_simulado = df_viaveis.iloc[0]
 
@@ -561,23 +607,34 @@ if st.button("🔍 Simular Empilhamento"):
     
     qtd_total = sum(c["Quantidade"] for c in st.session_state.cargas)
     # ------------------------------------------------------
-    # 4️⃣ CÁLCULO DE EMPILHAMENTO REAL
+    # 4️⃣ CÁLCULO DE EMPILHAMENTO REAL (VERSÃO CORRIGIDA)
     # ------------------------------------------------------
-
-    qtd_comp = int(comp_veic // comp_cx)
-    qtd_larg = int(larg_veic // larg_cx)
-    qtd_alt  = int(alt_veic // alt_cx)
-
-    capacidade_total = qtd_comp * qtd_larg * qtd_alt
-
-    st.write("### 📊 Capacidade Real de Empilhamento")
-    st.write(f"Caixas no comprimento: {qtd_comp}")
-    st.write(f"Caixas na largura: {qtd_larg}")
-    st.write(f"Caixas na altura: {qtd_alt}")
-    st.write(f"Capacidade máxima: {capacidade_total} caixas")
+    
+    capacidade_total = 0
+    espaco_ocupado = 0
+    caixas_alocadas = 0
+    
+    for carga in st.session_state.cargas:
+    
+        comp_cx = carga["Comprimento (m)"]
+        larg_cx = carga["Largura (m)"]
+        alt_cx  = carga["Altura (m)"]
+        qtd_cx  = carga["Quantidade"]
+    
+        qtd_comp = int(comp_veic // comp_cx)
+        qtd_larg = int(larg_veic // larg_cx)
+        qtd_alt  = int(alt_veic  // alt_cx)
+    
+        capacidade_carga = qtd_comp * qtd_larg * qtd_alt
+    
+        capacidade_total += capacidade_carga
+        caixas_alocadas += min(qtd_cx, capacidade_carga)
+    
+    st.write("### 📊 Capacidade Real de Empilhamento (Todas as Cargas)")
+    st.write(f"Capacidade máxima estimada: {capacidade_total} caixas")
     st.write(f"Carga solicitada: {qtd_total} caixas")
-
-    if qtd_total > capacidade_total:
+    
+    if caixas_alocadas < qtd_total:
         st.error("⚠️ A quantidade NÃO cabe fisicamente no veículo.")
         st.stop()
     else:
@@ -639,6 +696,7 @@ if st.button("🔍 Simular Empilhamento"):
     )
 
     st.plotly_chart(fig, use_container_width=True)
+
 
 
 
