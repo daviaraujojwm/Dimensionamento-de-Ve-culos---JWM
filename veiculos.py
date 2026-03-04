@@ -428,7 +428,7 @@ def cabe_no_piso_heuristica(cargas_unitarias, veh_comp, veh_larg, veh_alt):
 # BOTÃO CALCULAR (VERSÃO PROFISSIONAL)
 # ============================
 
-if st.button("🚛 Calcular Dimensionamento"):
+if st.button("🚀 Calcular Dimensionamento"):
 
     if not st.session_state.cargas:
         st.warning("Adicione pelo menos uma carga.")
@@ -782,3 +782,4 @@ if st.button("🔍 Simular Empilhamento"):
     )
     
     st.plotly_chart(fig, use_container_width=True)
+
