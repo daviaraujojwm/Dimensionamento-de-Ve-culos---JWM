@@ -541,7 +541,7 @@ if st.button("🚛 Calcular Dimensionamento"):
     st.success("Cálculo concluído com sucesso!")
 
 # ============================
-# 🚛 VEÍCULO IDEAL OPERACIONAL REAL
+# 🚛 VEÍCULO IDEAL OPERACIONAL COM RANKING
 # ============================
 
 if not st.session_state.df_result.empty:
@@ -549,33 +549,52 @@ if not st.session_state.df_result.empty:
     df_exibir = st.session_state.df_result.copy()
 
     # 🔹 Filtra apenas veículos viáveis
-    df_viaveis = df_exibir[df_exibir["Status"] == "Viável"]
+    df_viaveis = df_exibir[df_exibir["Status"] == "Viável"].copy()
 
     if not df_viaveis.empty:
 
-        # 🔹 Ordena pelo maior Score
+        # 🔹 Ordena por Score (maior primeiro)
         df_viaveis = df_viaveis.sort_values(
-            "Score",
+            by="Score",
             ascending=False
         ).reset_index(drop=True)
 
+        # 🔹 Criar coluna Ranking
+        df_viaveis["Ranking"] = df_viaveis.index + 1
+
+        # 🔹 Pega o melhor veículo
         melhor_veiculo = df_viaveis.iloc[0]["Veículo"]
 
-        # 🔹 Função para destacar melhor linha
+        # 🔹 Junta ranking ao dataframe original
+        df_exibir = df_exibir.merge(
+            df_viaveis[["Veículo", "Ranking"]],
+            on="Veículo",
+            how="left"
+        )
+
+        # 🔹 Ordena colocando viáveis primeiro por ranking
+        df_exibir = df_exibir.sort_values(
+            by=["Status", "Ranking"],
+            ascending=[True, True]
+        )
+
+        # 🔹 Função de destaque PROFISSIONAL (mais escuro)
         def destacar_melhor(row):
             if row["Veículo"] == melhor_veiculo:
-                return ["background-color: #d4edda; font-weight: bold"] * len(row)
+                return [
+                    "background-color: #145A32; color: white; font-weight: bold; font-size: 15px;"
+                ] * len(row)
             else:
                 return [""] * len(row)
 
-        st.subheader("🚛 Veículo Ideal Operacional")
+        st.subheader("🏆 Ranking de Veículos")
 
         st.dataframe(
             df_exibir.style.apply(destacar_melhor, axis=1),
             use_container_width=True
         )
 
-        st.success(f"✅ Melhor veículo recomendado: {melhor_veiculo}")
+        st.success(f"🚛 Melhor veículo pelo ranking: {melhor_veiculo}")
 
     else:
 
@@ -781,4 +800,5 @@ if st.button("🔍 Simular Empilhamento"):
     )
     
     st.plotly_chart(fig, use_container_width=True)
+
 
