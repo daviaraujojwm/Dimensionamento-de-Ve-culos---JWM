@@ -641,63 +641,89 @@ if st.button("🔍 Simular Empilhamento"):
         st.success("✅ A carga cabe fisicamente no veículo.")
 
     # ------------------------------------------------------
-    # 5️⃣ VISUALIZAÇÃO 3D REAL
+    # 5️⃣ VISUALIZAÇÃO 3D PROFISSIONAL
     # ------------------------------------------------------
-
+    
     import plotly.graph_objects as go
-
+    
     fig = go.Figure()
-
+    
+    # ============================
+    # ORGANIZA CARGAS UNITÁRIAS
+    # ============================
+    
+    cargas_unitarias = expand_cargas_unitarias(st.session_state.cargas)
+    
     contador = 0
-
-    for i in range(qtd_comp):
-        for j in range(qtd_larg):
-            for k in range(qtd_alt):
-
-                if contador >= qtd_total:
-                    break
-
-                x0 = i * comp_cx
-                y0 = j * larg_cx
-                z0 = k * alt_cx
-
-                fig.add_trace(go.Mesh3d(
-                    x=[x0, x0+comp_cx, x0+comp_cx, x0,
-                       x0, x0+comp_cx, x0+comp_cx, x0],
-                    y=[y0, y0, y0+larg_cx, y0+larg_cx,
-                       y0, y0, y0+larg_cx, y0+larg_cx],
-                    z=[z0, z0, z0, z0,
-                       z0+alt_cx, z0+alt_cx, z0+alt_cx, z0+alt_cx],
-                    opacity=0.5,
-                    color='blue',
-                    showscale=False
-                ))
-
-                contador += 1
-
-    # Estrutura do veículo (caixa externa)
+    
+    for item in cargas_unitarias:
+    
+        comp_cx = item["comp"]
+        larg_cx = item["larg"]
+        alt_cx  = item["alt"]
+    
+        qtd_comp = int(comp_veic // comp_cx)
+        qtd_larg = int(larg_veic // larg_cx)
+        qtd_alt  = int(alt_veic  // alt_cx)
+    
+        for i in range(qtd_comp):
+            for j in range(qtd_larg):
+                for k in range(qtd_alt):
+    
+                    if contador >= len(cargas_unitarias):
+                        break
+    
+                    x0 = i * comp_cx
+                    y0 = j * larg_cx
+                    z0 = k * alt_cx
+    
+                    fig.add_trace(go.Mesh3d(
+                        x=[x0, x0+comp_cx, x0+comp_cx, x0,
+                           x0, x0+comp_cx, x0+comp_cx, x0],
+                        y=[y0, y0, y0+larg_cx, y0+larg_cx,
+                           y0, y0, y0+larg_cx, y0+larg_cx],
+                        z=[z0, z0, z0, z0,
+                           z0+alt_cx, z0+alt_cx, z0+alt_cx, z0+alt_cx],
+                        opacity=0.85,
+                        color="#1f77b4",
+                        flatshading=True,
+                        showscale=False
+                    ))
+    
+                    contador += 1
+    
+    # ============================
+    # ESTRUTURA DO VEÍCULO (BAÚ)
+    # ============================
+    
     fig.add_trace(go.Mesh3d(
         x=[0, comp_veic, comp_veic, 0, 0, comp_veic, comp_veic, 0],
         y=[0, 0, larg_veic, larg_veic, 0, 0, larg_veic, larg_veic],
         z=[0, 0, 0, 0, alt_veic, alt_veic, alt_veic, alt_veic],
-        opacity=0.1,
-        color='gray',
+        opacity=0.08,
+        color="#444444",
+        flatshading=True,
         showscale=False
     ))
-
+    
+    # ============================
+    # CONFIGURAÇÃO PROFISSIONAL DE CÂMERA
+    # ============================
+    
     fig.update_layout(
-        title="Simulação 3D de Empilhamento Real",
+        title="Simulação 3D de Empilhamento",
         scene=dict(
-            xaxis_title="Comprimento",
-            yaxis_title="Largura",
-            zaxis_title="Altura"
+            xaxis=dict(title="Comprimento", showgrid=False),
+            yaxis=dict(title="Largura", showgrid=False),
+            zaxis=dict(title="Altura", showgrid=False),
+            aspectmode="data",
+            camera=dict(
+                eye=dict(x=1.6, y=1.6, z=1.2)
+            )
         ),
-        height=700
+        margin=dict(l=0, r=0, t=50, b=0),
+        height=750,
+        showlegend=False
     )
-
+    
     st.plotly_chart(fig, use_container_width=True)
-
-
-
-
-
