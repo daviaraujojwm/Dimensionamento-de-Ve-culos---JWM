@@ -16,7 +16,7 @@ st.set_page_config(page_title="Cubagem de Veículos - JWM", layout="wide")
 # ============================
 
 if "df_result" not in st.session_state:
-    st.session_state.df_result = None
+    st.session_state.df_result = pd.DataFrame()
 
 if "df_viaveis" not in st.session_state:
     st.session_state.df_viaveis = None
@@ -545,7 +545,7 @@ if st.button("🚛 Calcular Dimensionamento"):
 # 🚛 VEÍCULO IDEAL OPERACIONAL REAL
 # ============================
 
-if "df_result" in st.session_state and not st.session_state.df_result.empty:
+if not st.session_state.df_result.empty:
 
     df_exibir = st.session_state.df_result.copy()
 
@@ -789,3 +789,4 @@ if st.button("🔍 Simular Empilhamento"):
     )
     
     st.plotly_chart(fig, use_container_width=True)
+
