@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import random
 from io import BytesIO
 import plotly.graph_objects as go
 
@@ -641,89 +642,117 @@ if st.button("🔍 Simular Empilhamento"):
         st.success("✅ A carga cabe fisicamente no veículo.")
 
     # ------------------------------------------------------
-    # 5️⃣ VISUALIZAÇÃO 3D PROFISSIONAL
+    # 5️⃣ VISUALIZAÇÃO 3D PREMIUM LOGTECH
     # ------------------------------------------------------
-    
-    import plotly.graph_objects as go
     
     fig = go.Figure()
     
-    # ============================
-    # ORGANIZA CARGAS UNITÁRIAS
-    # ============================
-    
     cargas_unitarias = expand_cargas_unitarias(st.session_state.cargas)
     
-    contador = 0
+    # 🎨 Paleta profissional automática
+    cores = [
+        "#1f77b4", "#ff7f0e", "#2ca02c",
+        "#d62728", "#9467bd", "#8c564b"
+    ]
     
-    for item in cargas_unitarias:
+    contador = 0
+    frames = []
+    
+    # ============================
+    # GERAR CAIXAS COM ANIMAÇÃO
+    # ============================
+    
+    for idx, item in enumerate(cargas_unitarias):
     
         comp_cx = item["comp"]
         larg_cx = item["larg"]
         alt_cx  = item["alt"]
     
-        qtd_comp = int(comp_veic // comp_cx)
-        qtd_larg = int(larg_veic // larg_cx)
-        qtd_alt  = int(alt_veic  // alt_cx)
+        cor = cores[idx % len(cores)]
     
-        for i in range(qtd_comp):
-            for j in range(qtd_larg):
-                for k in range(qtd_alt):
+        x0 = (contador % int(comp_veic // comp_cx)) * comp_cx
+        y0 = ((contador // int(comp_veic // comp_cx)) % int(larg_veic // larg_cx)) * larg_cx
+        z0 = (contador // (int(comp_veic // comp_cx) * int(larg_veic // larg_cx))) * alt_cx
     
-                    if contador >= len(cargas_unitarias):
-                        break
+        mesh = go.Mesh3d(
+            x=[x0, x0+comp_cx, x0+comp_cx, x0,
+               x0, x0+comp_cx, x0+comp_cx, x0],
+            y=[y0, y0, y0+larg_cx, y0+larg_cx,
+               y0, y0, y0+larg_cx, y0+larg_cx],
+            z=[z0, z0, z0, z0,
+               z0+alt_cx, z0+alt_cx, z0+alt_cx, z0+alt_cx],
+            opacity=0.95,
+            color=cor,
+            flatshading=True,
+            lighting=dict(
+                ambient=0.6,
+                diffuse=0.8,
+                roughness=0.3,
+                specular=0.5
+            ),
+            showscale=False
+        )
     
-                    x0 = i * comp_cx
-                    y0 = j * larg_cx
-                    z0 = k * alt_cx
+        frames.append(go.Frame(data=[mesh], name=str(contador)))
+        fig.add_trace(mesh)
     
-                    fig.add_trace(go.Mesh3d(
-                        x=[x0, x0+comp_cx, x0+comp_cx, x0,
-                           x0, x0+comp_cx, x0+comp_cx, x0],
-                        y=[y0, y0, y0+larg_cx, y0+larg_cx,
-                           y0, y0, y0+larg_cx, y0+larg_cx],
-                        z=[z0, z0, z0, z0,
-                           z0+alt_cx, z0+alt_cx, z0+alt_cx, z0+alt_cx],
-                        opacity=0.85,
-                        color="#1f77b4",
-                        flatshading=True,
-                        showscale=False
-                    ))
-    
-                    contador += 1
+        contador += 1
     
     # ============================
-    # ESTRUTURA DO VEÍCULO (BAÚ)
+    # BAÚ FECHADO (ESTRUTURA)
     # ============================
     
     fig.add_trace(go.Mesh3d(
         x=[0, comp_veic, comp_veic, 0, 0, comp_veic, comp_veic, 0],
         y=[0, 0, larg_veic, larg_veic, 0, 0, larg_veic, larg_veic],
         z=[0, 0, 0, 0, alt_veic, alt_veic, alt_veic, alt_veic],
-        opacity=0.08,
-        color="#444444",
+        opacity=0.07,
+        color="#222222",
         flatshading=True,
         showscale=False
     ))
     
     # ============================
-    # CONFIGURAÇÃO PROFISSIONAL DE CÂMERA
+    # INDICADOR DE OCUPAÇÃO
+    # ============================
+    
+    volume_carga = sum([
+        item["comp"] * item["larg"] * item["alt"]
+        for item in cargas_unitarias
+    ])
+    
+    volume_veiculo = comp_veic * larg_veic * alt_veic
+    
+    ocupacao = (volume_carga / volume_veiculo) * 100
+    
+    # ============================
+    # CONFIGURAÇÃO VISUAL PREMIUM
     # ============================
     
     fig.update_layout(
-        title="Simulação 3D de Empilhamento",
+        title=f"Simulação 3D de Carregamento | Ocupação: {ocupacao:.1f}%",
         scene=dict(
-            xaxis=dict(title="Comprimento", showgrid=False),
-            yaxis=dict(title="Largura", showgrid=False),
-            zaxis=dict(title="Altura", showgrid=False),
+            xaxis=dict(title="Comprimento", showgrid=False, backgroundcolor="white"),
+            yaxis=dict(title="Largura", showgrid=False, backgroundcolor="white"),
+            zaxis=dict(title="Altura", showgrid=False, backgroundcolor="white"),
             aspectmode="data",
             camera=dict(
-                eye=dict(x=1.6, y=1.6, z=1.2)
+                eye=dict(x=1.8, y=1.8, z=1.3)
             )
         ),
-        margin=dict(l=0, r=0, t=50, b=0),
-        height=750,
-        showlegend=False
+        margin=dict(l=0, r=0, t=60, b=0),
+        height=800,
+        showlegend=False,
+        updatemenus=[{
+            "type": "buttons",
+            "buttons": [{
+                "label": "▶ Iniciar Animação",
+                "method": "animate",
+                "args": [None, {"frame": {"duration": 100, "redraw": True}}]
+            }]
+        }]
     )
+    
+    fig.frames = frames
     
     st.plotly_chart(fig, use_container_width=True)
