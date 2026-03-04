@@ -586,47 +586,53 @@ else:
     st.info("Clique em calcular para gerar o dimensionamento.")
 
 # ==========================================================
-# 📦 SIMULAÇÃO REAL DE EMPILHAMENTO (VERSÃO FINAL AJUSTADA)
+# 📦 SIMULAÇÃO REAL DE EMPILHAMENTO
 # ==========================================================
 
 if st.button("🔍 Simular Empilhamento"):
 
-    if "df_result" not in st.session_state:
-        st.error("Execute o cálculo primeiro.")
+    if st.session_state.df_result.empty:
+        st.error("⚠ Execute o cálculo primeiro.")
         st.stop()
 
+    # 🔹 Cria df_base corretamente
     df_base = st.session_state.df_result.copy()
 
-# ------------------------------------------------------
-# FILTRAR VEÍCULOS REALMENTE VIÁVEIS (VERSÃO CORRETA)
-# ------------------------------------------------------
-df_viaveis = df_base[df_base["Status"] == "Viável"].copy()
+    # 🔹 Filtra apenas veículos viáveis
+    df_viaveis = df_base[df_base["Status"] == "Viável"].copy()
 
-if df_viaveis.empty:
-    st.warning("⚠ Nenhum veículo viável encontrado para simulação.")
-else:
-    # Critério de eficiência: menor sobra de volume
-    df_viaveis["Sobra Volume"] = (
-        df_viaveis["Volume Interno (m³)"] - volume_total
+    if df_viaveis.empty:
+        st.error("❌ Nenhum veículo viável encontrado.")
+        st.stop()
+
+    # 🔹 Ordena pelo maior Score (ranking geral)
+    df_viaveis = df_viaveis.sort_values(
+        by="Score",
+        ascending=False
     )
 
-    melhor_veiculo = df_viaveis.sort_values(
-        by="Sobra Volume"
-    ).iloc[0]
+    veiculo_simulado = df_viaveis.iloc[0]
 
-    # Dados do veículo escolhido
-    comp_veic = melhor_veiculo["Comprimento (m)"]
-    larg_veic = melhor_veiculo["Largura (m)"]
-    alt_veic = melhor_veiculo["Altura (m)"]
+    st.success(f"🚛 Veículo ideal pelo ranking: {veiculo_simulado['Veículo']}")
 
-    st.success(f"🚛 Veículo selecionado para simulação: {melhor_veiculo['Veículo']}")
     # ------------------------------------------------------
-    # 2️⃣ DADOS DO VEÍCULO
+    # DADOS DO VEÍCULO
     # ------------------------------------------------------
 
-    comp_veic = veiculo_simulado["comprimento"]
-    larg_veic = veiculo_simulado["largura"]
-    alt_veic  = veiculo_simulado["altura"]
+    comp_veic = df_veiculos.loc[
+        df_veiculos["Veículo"] == veiculo_simulado["Veículo"],
+        "comprimento"
+    ].values[0]
+
+    larg_veic = df_veiculos.loc[
+        df_veiculos["Veículo"] == veiculo_simulado["Veículo"],
+        "largura"
+    ].values[0]
+
+    alt_veic = df_veiculos.loc[
+        df_veiculos["Veículo"] == veiculo_simulado["Veículo"],
+        "altura"
+    ].values[0]
 
     # ------------------------------------------------------
     # 3️⃣ DADOS DA CARGA
@@ -775,3 +781,4 @@ else:
     )
     
     st.plotly_chart(fig, use_container_width=True)
+
