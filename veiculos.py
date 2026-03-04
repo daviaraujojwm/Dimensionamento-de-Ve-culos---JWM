@@ -11,6 +11,19 @@ import plotly.graph_objects as go
 st.set_page_config(page_title="Cubagem de Veículos - JWM", layout="wide")
 
 # ============================
+# SESSION STATE INIT
+# ============================
+
+if "df_result" not in st.session_state:
+    st.session_state.df_result = None
+
+if "df_viaveis" not in st.session_state:
+    st.session_state.df_viaveis = None
+
+if "veiculo_simulado" not in st.session_state:
+    st.session_state.veiculo_simulado = None
+
+# ============================
 # SIDEBAR
 # ============================
 st.sidebar.title("📘 Instruções de Uso")
@@ -431,7 +444,7 @@ if calcular:
 
 # 🚛 VEÍCULO IDEAL OPERACIONAL REAL
 
-if not st.session_state.df_result.empty:
+if st.session_state.df_result is not None and not st.session_state.df_result.empty:
 
     df_viaveis = st.session_state.df_result.copy()
 
@@ -626,6 +639,7 @@ if st.button("🔍 Simular Empilhamento"):
     )
 
     st.plotly_chart(fig, use_container_width=True)
+
 
 
 
