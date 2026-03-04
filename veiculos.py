@@ -509,8 +509,13 @@ if st.button("🔍 Simular Empilhamento"):
 
     # Junta volume real do veículo
     df_viaveis = df_viaveis.merge(
-        df_veiculos[["Veículo", "Capacidade Volume (m³)",
-             "comprimento", "largura", "altura"]]
+        df_veiculos[[
+            "Veículo",
+            "Capacidade Volume (m³)",
+            "comprimento",
+            "largura",
+            "altura"
+        ]],
         on="Veículo",
         how="left"
     )
@@ -621,7 +626,6 @@ if st.button("🔍 Simular Empilhamento"):
     )
 
     st.plotly_chart(fig, use_container_width=True)
-
 
 
 
