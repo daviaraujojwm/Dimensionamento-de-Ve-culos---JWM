@@ -616,8 +616,6 @@ if st.button("🔍 Simular Empilhamento"):
 
     veiculo_simulado = df_viaveis.iloc[0]
 
-    st.success(f"🚛 Veículo ideal pelo ranking: {veiculo_simulado['Veículo']}")
-
     # ------------------------------------------------------
     # DADOS DO VEÍCULO
     # ------------------------------------------------------
@@ -784,6 +782,7 @@ if st.button("🔍 Simular Empilhamento"):
     )
     
     st.plotly_chart(fig, use_container_width=True)
+
 
 
 
