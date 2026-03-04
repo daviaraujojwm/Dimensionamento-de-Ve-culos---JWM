@@ -437,11 +437,17 @@ if not st.session_state.df_result.empty:
 
     # Junta volume real do veículo
     df_viaveis = df_viaveis.merge(
-        df_veiculos[["Veículo", "Capacidade Volume (m³)"]],
+        df_veiculos[[
+            "Veículo",
+            "Capacidade Volume (m³)",
+            "comprimento",
+            "largura",
+            "altura"
+        ]],
         on="Veículo",
         how="left"
     )
-
+    
     # Ordena pelo menor volume
     df_viaveis = df_viaveis.sort_values("Capacidade Volume (m³)").reset_index(drop=True)
 
@@ -615,5 +621,6 @@ if st.button("🔍 Simular Empilhamento"):
     )
 
     st.plotly_chart(fig, use_container_width=True)
+
 
 
