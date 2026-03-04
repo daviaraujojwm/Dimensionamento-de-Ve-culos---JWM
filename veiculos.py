@@ -541,15 +541,15 @@ if st.button("🚛 Calcular Dimensionamento"):
     st.success("Cálculo concluído com sucesso!")
 
 # ============================
-# 🚛 VEÍCULO IDEAL OPERACIONAL COM RANKING
+# 🚛 VEÍCULOS VIÁVEIS (APENAS)
 # ============================
 
 if not st.session_state.df_result.empty:
 
-    df_exibir = st.session_state.df_result.copy()
+    df_base = st.session_state.df_result.copy()
 
-    # 🔹 Filtra apenas veículos viáveis
-    df_viaveis = df_exibir[df_exibir["Status"] == "Viável"].copy()
+    # 🔹 Filtra somente viáveis
+    df_viaveis = df_base[df_base["Status"] == "Viável"].copy()
 
     if not df_viaveis.empty:
 
@@ -559,26 +559,12 @@ if not st.session_state.df_result.empty:
             ascending=False
         ).reset_index(drop=True)
 
-        # 🔹 Criar coluna Ranking
+        # 🔹 Criar Ranking
         df_viaveis["Ranking"] = df_viaveis.index + 1
 
-        # 🔹 Pega o melhor veículo
         melhor_veiculo = df_viaveis.iloc[0]["Veículo"]
 
-        # 🔹 Junta ranking ao dataframe original
-        df_exibir = df_exibir.merge(
-            df_viaveis[["Veículo", "Ranking"]],
-            on="Veículo",
-            how="left"
-        )
-
-        # 🔹 Ordena colocando viáveis primeiro por ranking
-        df_exibir = df_exibir.sort_values(
-            by=["Status", "Ranking"],
-            ascending=[True, True]
-        )
-
-        # 🔹 Função de destaque PROFISSIONAL (mais escuro)
+        # 🔹 Destaque visual do melhor
         def destacar_melhor(row):
             if row["Veículo"] == melhor_veiculo:
                 return [
@@ -587,19 +573,17 @@ if not st.session_state.df_result.empty:
             else:
                 return [""] * len(row)
 
-        st.subheader("🏆 Ranking de Veículos")
+        st.subheader("🏆 Veículos Viáveis (Ranking)")
 
         st.dataframe(
-            df_exibir.style.apply(destacar_melhor, axis=1),
+            df_viaveis.style.apply(destacar_melhor, axis=1),
             use_container_width=True
         )
 
         st.success(f"🚛 Melhor veículo pelo ranking: {melhor_veiculo}")
 
     else:
-
         st.warning("⚠ Nenhum veículo é viável para essa carga.")
-        st.dataframe(df_exibir, use_container_width=True)
 
 else:
     st.info("Clique em calcular para gerar o dimensionamento.")
@@ -800,5 +784,6 @@ if st.button("🔍 Simular Empilhamento"):
     )
     
     st.plotly_chart(fig, use_container_width=True)
+
 
 
