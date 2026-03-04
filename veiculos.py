@@ -526,9 +526,9 @@ if st.button("🔍 Simular Empilhamento"):
     # 2️⃣ DADOS DO VEÍCULO
     # ------------------------------------------------------
 
-    comp_veic = veiculo_simulado["Comprimento"]
-    larg_veic = veiculo_simulado["Largura"]
-    alt_veic  = veiculo_simulado["Altura"]
+    comp_veic = veiculo_simulado["comprimento"]
+    larg_veic = veiculo_simulado["largura"]
+    alt_veic  = veiculo_simulado["altura"]
 
     # ------------------------------------------------------
     # 3️⃣ DADOS DA CARGA
@@ -621,6 +621,7 @@ if st.button("🔍 Simular Empilhamento"):
     )
 
     st.plotly_chart(fig, use_container_width=True)
+
 
 
 
