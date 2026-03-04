@@ -178,32 +178,80 @@ if st.button("➕ Adicionar carga"):
         st.error(f"Erro ao adicionar carga: {e}")
 
 # ============================
-# LISTA DE CARGAS
+# LISTA E EDIÇÃO DE CARGAS
 # ============================
+
 if st.session_state.cargas:
-    st.subheader("📋 Cargas adicionadas")
 
-    for i, carga in enumerate(st.session_state.cargas):
-        col1, col2 = st.columns([9, 1])
-        with col1:
-            st.write(
-                f"**Carga {i+1}:** {carga['Quantidade']} unid • "
-                f"{carga['Comprimento (m)']}m × {carga['Largura (m)']}m × {carga['Altura (m)']}m • "
-                f"Peso total: {carga['Peso total (kg)']} kg • Volume: {carga['Volume total (m³)']:.3f} m³"
-            )
+    st.subheader("📋 Cargas adicionadas (Editáveis)")
 
-        with col2:
-            if st.button("❌", key=f"delete_{i}"):
-                st.session_state.to_delete = i
+    df_cargas_edit = pd.DataFrame(st.session_state.cargas)
 
-    if st.session_state.to_delete is not None:
-        del st.session_state.cargas[st.session_state.to_delete]
-        st.session_state.to_delete = None
-        st.rerun()
+    df_editado = st.data_editor(
+        df_cargas_edit,
+        use_container_width=True,
+        num_rows="dynamic",
+        key="editor_cargas"
+    )
 
-    if st.button("🧹 Limpar todas as cargas"):
-        st.session_state.cargas = []
-        st.rerun()
+    col1, col2, col3 = st.columns(3)
+
+    # 💾 SALVAR ALTERAÇÕES
+    with col1:
+        if st.button("💾 Salvar alterações"):
+            try:
+                novas_cargas = []
+
+                for _, row in df_editado.iterrows():
+
+                    vol_unit = (
+                        row["Comprimento (m)"]
+                        * row["Largura (m)"]
+                        * row["Altura (m)"]
+                    )
+
+                    peso_total = (
+                        row["Peso unitário (kg)"]
+                        * row["Quantidade"]
+                    )
+
+                    novas_cargas.append({
+                        "Comprimento (m)": row["Comprimento (m)"],
+                        "Largura (m)": row["Largura (m)"],
+                        "Altura (m)": row["Altura (m)"],
+                        "Peso unitário (kg)": row["Peso unitário (kg)"],
+                        "Quantidade": int(row["Quantidade"]),
+                        "Volume total (m³)": vol_unit * row["Quantidade"],
+                        "Peso total (kg)": peso_total
+                    })
+
+                st.session_state.cargas = novas_cargas
+                st.success("Alterações salvas com sucesso!")
+                st.rerun()
+
+            except Exception as e:
+                st.error(f"Erro ao salvar alterações: {e}")
+
+    # ❌ LIMPAR CARGA UNITÁRIA
+    with col2:
+        indice_excluir = st.number_input(
+            "Excluir carga nº:",
+            min_value=1,
+            max_value=len(st.session_state.cargas),
+            step=1
+        )
+
+        if st.button("❌ Excluir carga selecionada"):
+            del st.session_state.cargas[indice_excluir - 1]
+            st.success("Carga removida.")
+            st.rerun()
+
+    # 🧹 LIMPAR TODAS
+    with col3:
+        if st.button("🧹 Limpar todas"):
+            st.session_state.cargas = []
+            st.success("Todas as cargas foram removidas.")
+            st.rerun()
 
 else:
     st.info("Nenhuma carga adicionada ainda.")
@@ -378,17 +426,14 @@ def cabe_no_piso_heuristica(cargas_unitarias, veh_comp, veh_larg, veh_alt):
 
 
 # ============================
-# BOTÃO CALCULAR
+# BOTÃO CALCULAR (VERSÃO PROFISSIONAL)
 # ============================
-calcular = st.button("🚀 Calcular Dimensionamento")
 
-if calcular:
+if st.button("🚛 Calcular Dimensionamento"):
 
     if not st.session_state.cargas:
         st.warning("Adicione pelo menos uma carga.")
         st.stop()
-
-    cargas_unitarias = expand_cargas_unitarias(st.session_state.cargas)
 
     resultados = []
 
@@ -397,147 +442,149 @@ if calcular:
     else:
         df_testar = df_veiculos
 
+    # 🔢 Totais reais
     volume_total_carga = sum(
-        c["comp"] * c["larg"] * c["alt"]
-        for c in cargas_unitarias
+        item["Volume total (m³)"] for item in st.session_state.cargas
     )
 
-    peso_total = sum(c["peso"] for c in cargas_unitarias)
+    peso_total = sum(
+        item["Peso total (kg)"] for item in st.session_state.cargas
+    )
+
+    cargas_unitarias = expand_cargas_unitarias(st.session_state.cargas)
 
     # ============================
     # LOOP VEÍCULOS
     # ============================
     for _, veic in df_testar.iterrows():
 
-            # ============================
-            # DADOS DO VEÍCULO
-            # ============================
-            comp_v = veic["comprimento"]
-            larg_v = veic["largura"]
-            alt_v  = veic["altura"]
-            peso_max = veic["peso_max"]
-        
-            volume_veiculo = comp_v * larg_v * alt_v
-        
-            # ============================
-            # CONTROLE REAL DE VOLUME
-            # ============================
-            aproveitamento_volume_real = volume_total_carga / volume_veiculo
-        
-            if aproveitamento_volume_real > 1:
-                continue
-        
-            aproveitamento_volume = round(aproveitamento_volume_real * 100, 2)
-        
-            # ============================
-            # CONTROLE REAL DE PESO
-            # ============================
-            peso_aprov_real = (peso_total / peso_max) * 100
+        comp_v = veic["comprimento"]
+        larg_v = veic["largura"]
+        alt_v  = veic["altura"]
+        peso_max = veic["peso_max"]
 
-            # Bloqueia sobrepeso
-            if peso_aprov_real > 100:
-                continue
-            
-            # Penalidade de segurança
-            penalidade_peso = 0
-            
-            if peso_aprov_real > 90:
-                penalidade_peso = 40   # muito próximo do limite
-            
-            elif peso_aprov_real > 85:
-                penalidade_peso = 20   # atenção operacional
-            
-            peso_aprov = round(peso_aprov_real, 2)
-        
-            # ============================
-            # VERIFICAÇÃO REAL DE EMPILHAMENTO (HEURÍSTICA)
-            # ============================
-            
+        volume_veiculo = comp_v * larg_v * alt_v
+
+        status = "Viável"
+        motivo = ""
+
+        # 🔴 VERIFICA VOLUME
+        if volume_total_carga > volume_veiculo:
+            status = "Inviável"
+            motivo = "Excede volume do veículo"
+
+        # 🔴 VERIFICA PESO
+        elif peso_total > peso_max:
+            status = "Inviável"
+            motivo = "Excede peso máximo permitido"
+
+        # 🔴 VERIFICA EMPILHAMENTO
+        else:
             cabe = cabe_no_piso_heuristica(
                 cargas_unitarias,
                 comp_v,
                 larg_v,
                 alt_v
             )
-            
+
             if not cabe:
-                continue
-            
-            caixas_total = len(cargas_unitarias)
-        
-            # ============================
-            # HEURÍSTICA FINAL
-            # ============================
-        
-            score = (
-                (aproveitamento_volume * 0.5) +
-                (peso_aprov * 0.3) +
-                (caixas_total * 0.2)
-            ) - penalidade_peso
-        
+                status = "Inviável"
+                motivo = "Não cabe fisicamente (dimensão incompatível)"
+
+        # 🚫 SE INVIÁVEL
+        if status == "Inviável":
             resultados.append({
                 "Veículo": veic["Veículo"],
-                "Aproveitamento Volume (%)": aproveitamento_volume,
-                "Aproveitamento Peso (%)": peso_aprov,
-                "Caixas Alocadas": caixas_total,
-                "Score": round(score, 2)
-        })
-    # ============================
-    # CRIA DATAFRAME FINAL (FORA DO LOOP)
-    # ============================
-    if resultados:
-        df_result = pd.DataFrame(resultados)
+                "Status": status,
+                "Motivo": motivo,
+                "Aproveitamento Volume (%)": None,
+                "Aproveitamento Peso (%)": None,
+                "Score": None
+            })
+            continue
 
-        df_result = df_result.sort_values(
-            "Aproveitamento Volume (%)",
+        # ✅ SE VIÁVEL
+        aproveitamento_volume = round(
+            (volume_total_carga / volume_veiculo) * 100, 2
+        )
+
+        aproveitamento_peso = round(
+            (peso_total / peso_max) * 100, 2
+        )
+
+        score = round(
+            (aproveitamento_volume * 0.6) +
+            (aproveitamento_peso * 0.4),
+            2
+        )
+
+        resultados.append({
+            "Veículo": veic["Veículo"],
+            "Status": "Viável",
+            "Motivo": "",
+            "Aproveitamento Volume (%)": aproveitamento_volume,
+            "Aproveitamento Peso (%)": aproveitamento_peso,
+            "Score": score
+        })
+
+    # ============================
+    # DATAFRAME FINAL
+    # ============================
+    df_result = pd.DataFrame(resultados)
+
+    df_result = df_result.sort_values(
+        by=["Status", "Score"],
+        ascending=[True, False]
+    ).reset_index(drop=True)
+
+    st.session_state.df_result = df_result
+
+    st.success("Cálculo concluído com sucesso!")
+
+# ============================
+# 🚛 VEÍCULO IDEAL OPERACIONAL REAL
+# ============================
+
+if "df_result" in st.session_state and not st.session_state.df_result.empty:
+
+    df_exibir = st.session_state.df_result.copy()
+
+    # 🔹 Filtra apenas veículos viáveis
+    df_viaveis = df_exibir[df_exibir["Status"] == "Viável"]
+
+    if not df_viaveis.empty:
+
+        # 🔹 Ordena pelo maior Score
+        df_viaveis = df_viaveis.sort_values(
+            "Score",
             ascending=False
         ).reset_index(drop=True)
 
-        st.session_state.df_result = df_result
+        melhor_veiculo = df_viaveis.iloc[0]["Veículo"]
+
+        # 🔹 Função para destacar melhor linha
+        def destacar_melhor(row):
+            if row["Veículo"] == melhor_veiculo:
+                return ["background-color: #d4edda; font-weight: bold"] * len(row)
+            else:
+                return [""] * len(row)
+
+        st.subheader("🚛 Veículo Ideal Operacional")
+
+        st.dataframe(
+            df_exibir.style.apply(destacar_melhor, axis=1),
+            use_container_width=True
+        )
+
+        st.success(f"✅ Melhor veículo recomendado: {melhor_veiculo}")
+
     else:
-        st.session_state.df_result = pd.DataFrame()
-        st.warning("Nenhum veículo comporta as cargas.")
 
-# 🚛 VEÍCULO IDEAL OPERACIONAL REAL
-
-if st.session_state.df_result is not None and not st.session_state.df_result.empty:
-
-    df_viaveis = st.session_state.df_result.copy()
-
-    # Junta volume real do veículo
-    df_viaveis = df_viaveis.merge(
-        df_veiculos[[
-            "Veículo",
-            "Capacidade Volume (m³)",
-            "comprimento",
-            "largura",
-            "altura"
-        ]],
-        on="Veículo",
-        how="left"
-    )
-    
-    # Ordena pelo menor volume
-    df_viaveis = df_viaveis.sort_values("Capacidade Volume (m³)").reset_index(drop=True)
-
-    melhor_veiculo = df_viaveis.iloc[0]["Veículo"]
-
-    df_viaveis["Ideal"] = df_viaveis["Veículo"] == melhor_veiculo
-
-    def destacar_linha(row):
-        if row["Ideal"]:
-            return ['background-color: #28FF77'] * len(row)
-        return [''] * len(row)
-
-    st.dataframe(
-        df_viaveis.style.apply(destacar_linha, axis=1),
-        use_container_width=True
-    )
-
-    st.success(f"✅ Veículo mais viável: {melhor_veiculo}")
+        st.warning("⚠ Nenhum veículo é viável para essa carga.")
+        st.dataframe(df_exibir, use_container_width=True)
 
 else:
-    st.error("❌ Nenhum veículo comporta essa carga fisicamente.")
+    st.info("Clique em calcular para gerar o dimensionamento.")
 
 # ==========================================================
 # 📦 SIMULAÇÃO REAL DE EMPILHAMENTO (VERSÃO FINAL AJUSTADA)
@@ -642,25 +689,22 @@ if st.button("🔍 Simular Empilhamento"):
         st.success("✅ A carga cabe fisicamente no veículo.")
 
     # ------------------------------------------------------
-    # 5️⃣ VISUALIZAÇÃO 3D PREMIUM LOGTECH
+    # 5️⃣ VISUALIZAÇÃO 3D PROFISSIONAL (ESTÁTICO)
     # ------------------------------------------------------
+    
+    import plotly.graph_objects as go
     
     fig = go.Figure()
     
     cargas_unitarias = expand_cargas_unitarias(st.session_state.cargas)
     
-    # 🎨 Paleta profissional automática
+    # 🎨 Paleta profissional
     cores = [
         "#1f77b4", "#ff7f0e", "#2ca02c",
         "#d62728", "#9467bd", "#8c564b"
     ]
     
     contador = 0
-    frames = []
-    
-    # ============================
-    # GERAR CAIXAS COM ANIMAÇÃO
-    # ============================
     
     for idx, item in enumerate(cargas_unitarias):
     
@@ -670,11 +714,14 @@ if st.button("🔍 Simular Empilhamento"):
     
         cor = cores[idx % len(cores)]
     
-        x0 = (contador % int(comp_veic // comp_cx)) * comp_cx
-        y0 = ((contador // int(comp_veic // comp_cx)) % int(larg_veic // larg_cx)) * larg_cx
-        z0 = (contador // (int(comp_veic // comp_cx) * int(larg_veic // larg_cx))) * alt_cx
+        max_x = int(comp_veic // comp_cx)
+        max_y = int(larg_veic // larg_cx)
     
-        mesh = go.Mesh3d(
+        x0 = (contador % max_x) * comp_cx
+        y0 = ((contador // max_x) % max_y) * larg_cx
+        z0 = (contador // (max_x * max_y)) * alt_cx
+    
+        fig.add_trace(go.Mesh3d(
             x=[x0, x0+comp_cx, x0+comp_cx, x0,
                x0, x0+comp_cx, x0+comp_cx, x0],
             y=[y0, y0, y0+larg_cx, y0+larg_cx,
@@ -686,27 +733,24 @@ if st.button("🔍 Simular Empilhamento"):
             flatshading=True,
             lighting=dict(
                 ambient=0.6,
-                diffuse=0.8,
+                diffuse=0.9,
                 roughness=0.3,
-                specular=0.5
+                specular=0.4
             ),
             showscale=False
-        )
-    
-        frames.append(go.Frame(data=[mesh], name=str(contador)))
-        fig.add_trace(mesh)
+        ))
     
         contador += 1
     
     # ============================
-    # BAÚ FECHADO (ESTRUTURA)
+    # ESTRUTURA DO BAÚ
     # ============================
     
     fig.add_trace(go.Mesh3d(
         x=[0, comp_veic, comp_veic, 0, 0, comp_veic, comp_veic, 0],
         y=[0, 0, larg_veic, larg_veic, 0, 0, larg_veic, larg_veic],
         z=[0, 0, 0, 0, alt_veic, alt_veic, alt_veic, alt_veic],
-        opacity=0.07,
+        opacity=0.06,
         color="#222222",
         flatshading=True,
         showscale=False
@@ -716,43 +760,32 @@ if st.button("🔍 Simular Empilhamento"):
     # INDICADOR DE OCUPAÇÃO
     # ============================
     
-    volume_carga = sum([
+    volume_carga = sum(
         item["comp"] * item["larg"] * item["alt"]
         for item in cargas_unitarias
-    ])
+    )
     
     volume_veiculo = comp_veic * larg_veic * alt_veic
-    
     ocupacao = (volume_carga / volume_veiculo) * 100
     
     # ============================
-    # CONFIGURAÇÃO VISUAL PREMIUM
+    # LAYOUT PROFISSIONAL
     # ============================
     
     fig.update_layout(
         title=f"Simulação 3D de Carregamento | Ocupação: {ocupacao:.1f}%",
         scene=dict(
-            xaxis=dict(title="Comprimento", showgrid=False, backgroundcolor="white"),
-            yaxis=dict(title="Largura", showgrid=False, backgroundcolor="white"),
-            zaxis=dict(title="Altura", showgrid=False, backgroundcolor="white"),
+            xaxis=dict(title="Comprimento", showgrid=False),
+            yaxis=dict(title="Largura", showgrid=False),
+            zaxis=dict(title="Altura", showgrid=False),
             aspectmode="data",
             camera=dict(
-                eye=dict(x=1.8, y=1.8, z=1.3)
+                eye=dict(x=1.7, y=1.7, z=1.3)
             )
         ),
         margin=dict(l=0, r=0, t=60, b=0),
         height=800,
-        showlegend=False,
-        updatemenus=[{
-            "type": "buttons",
-            "buttons": [{
-                "label": "▶ Iniciar Animação",
-                "method": "animate",
-                "args": [None, {"frame": {"duration": 100, "redraw": True}}]
-            }]
-        }]
+        showlegend=False
     )
-    
-    fig.frames = frames
     
     st.plotly_chart(fig, use_container_width=True)
