@@ -378,25 +378,23 @@ if calcular:
             # ============================
             # SIMULAÇÃO SIMPLIFICADA DE EMPILHAMENTO
             # ============================
-        
-            caixas_total = 0
-                
-            for carga in cargas_unitarias:
-                
-                comp_c = carga["comp"]
-                larg_c = carga["larg"]
-                alt_c  = carga["alt"]
-                
-                qtd_comprimento = int(comp_v // comp_c)
-                qtd_largura     = int(larg_v // larg_c)
-                
-                caixas_por_camada = qtd_comprimento * qtd_largura
-                camadas = int(alt_v // alt_c)
-                
-                capacidade_total = caixas_por_camada * camadas
-                
-                if capacidade_total > 0:
-                    caixas_total += 1
+            
+            # Considera a primeira carga como padrão
+            comp_c = cargas_unitarias[0]["comp"]
+            larg_c = cargas_unitarias[0]["larg"]
+            alt_c  = cargas_unitarias[0]["alt"]
+            
+            qtd_comp = int(comp_v // comp_c)
+            qtd_larg = int(larg_v // larg_c)
+            qtd_alt  = int(alt_v  // alt_c)
+            
+            capacidade_total = qtd_comp * qtd_larg * qtd_alt
+            
+            # Se não couber fisicamente, elimina o veículo
+            if capacidade_total < len(cargas_unitarias):
+                continue
+            
+            caixas_total = capacidade_total
         
             # ============================
             # HEURÍSTICA FINAL
@@ -431,45 +429,40 @@ if calcular:
         st.session_state.df_result = pd.DataFrame()
         st.warning("Nenhum veículo comporta as cargas.")
 
-# ==========================================================
 # 🚛 VEÍCULO IDEAL OPERACIONAL REAL
-# ==========================================================
 
-if "df_result" in st.session_state and not st.session_state.df_result.empty:
+if not st.session_state.df_result.empty:
 
-    st.markdown("---")
-    st.header("🚛 Veículo Ideal Operacional")
+    df_viaveis = st.session_state.df_result.copy()
 
-    df_base = st.session_state.df_result.copy()
+    # Junta volume real do veículo
+    df_viaveis = df_viaveis.merge(
+        df_veiculos[["Veículo", "Capacidade Volume (m³)"]],
+        on="Veículo",
+        how="left"
+    )
 
-    # Filtra veículos que realmente suportam peso e volume
-    df_viaveis = df_base[
-        (df_base["Aproveitamento Volume (%)"] <= 100) &
-        (df_base["Aproveitamento Peso (%)"] <= 100)
-    ].copy()
+    # Ordena pelo menor volume
+    df_viaveis = df_viaveis.sort_values("Capacidade Volume (m³)").reset_index(drop=True)
 
-    if not df_viaveis.empty:
+    melhor_veiculo = df_viaveis.iloc[0]["Veículo"]
 
-        # Junta com volume real do veículo
-        df_viaveis = df_viaveis.merge(
-            df_veiculos[["Veículo", "Capacidade Volume (m³)"]],
-            on="Veículo",
-            how="left"
-        )
+    df_viaveis["Ideal"] = df_viaveis["Veículo"] == melhor_veiculo
 
-        # Ordena pelo menor volume do veículo
-        df_viaveis = df_viaveis.sort_values(
-            "Capacidade Volume (m³)"
-        )
+    def destacar_linha(row):
+        if row["Ideal"]:
+            return ['background-color: #28FF77'] * len(row)
+        return [''] * len(row)
 
-        melhor_veiculo = df_viaveis.iloc[0]["Veículo"]
+    st.dataframe(
+        df_viaveis.style.apply(destacar_linha, axis=1),
+        use_container_width=True
+    )
 
-        st.dataframe(df_viaveis, use_container_width=True)
+    st.success(f"✅ Veículo mais viável: {melhor_veiculo}")
 
-        st.success(f"🚀 Veículo ideal operacional: **{melhor_veiculo}**")
-
-    else:
-        st.error("❌ Nenhum veículo suporta essa carga.")
+else:
+    st.error("❌ Nenhum veículo comporta essa carga fisicamente.")
     
     excel = gerar_excel_bytes(
         st.session_state.df_result,
@@ -511,7 +504,7 @@ if st.button("🔍 Simular Empilhamento"):
     # Junta volume real do veículo
     df_viaveis = df_viaveis.merge(
         df_veiculos[["Veículo", "Capacidade Volume (m³)",
-                     "Comprimento (m)", "Largura (m)", "Altura (m)"]],
+             "comprimento", "largura", "altura"]]
         on="Veículo",
         how="left"
     )
@@ -527,19 +520,22 @@ if st.button("🔍 Simular Empilhamento"):
     # 2️⃣ DADOS DO VEÍCULO
     # ------------------------------------------------------
 
-    comp_veic = veiculo_simulado["Comprimento (m)"]
-    larg_veic = veiculo_simulado["Largura (m)"]
-    alt_veic  = veiculo_simulado["Altura (m)"]
+    comp_veic = veiculo_simulado["Comprimento"]
+    larg_veic = veiculo_simulado["Largura"]
+    alt_veic  = veiculo_simulado["Altura"]
 
     # ------------------------------------------------------
     # 3️⃣ DADOS DA CARGA
     # ------------------------------------------------------
 
-    comp_cx = comprimento
-    larg_cx = largura
-    alt_cx  = altura
-    qtd_total = quantidade
-
+    # Usa a primeira carga como padrão
+    carga_base = st.session_state.cargas[0]
+    
+    comp_cx = carga_base["Comprimento (m)"]
+    larg_cx = carga_base["Largura (m)"]
+    alt_cx  = carga_base["Altura (m)"]
+    
+    qtd_total = sum(c["Quantidade"] for c in st.session_state.cargas)
     # ------------------------------------------------------
     # 4️⃣ CÁLCULO DE EMPILHAMENTO REAL
     # ------------------------------------------------------
@@ -619,4 +615,5 @@ if st.button("🔍 Simular Empilhamento"):
     )
 
     st.plotly_chart(fig, use_container_width=True)
+
 
