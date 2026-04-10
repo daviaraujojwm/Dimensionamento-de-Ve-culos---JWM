@@ -308,23 +308,6 @@ def calcular_totais(cargas):
     peso = sum(item["Peso total (kg)"] for item in cargas)
     return volume, peso
     
-def calcular_eficiencia(volume_usado, volume_total, peso_total, peso_max):
-
-    if volume_total == 0 or peso_max == 0:
-        return 0
-
-    ocupacao_volume = (volume_usado / volume_total) * 100
-    ocupacao_peso = (peso_total / peso_max) * 100
-
-    balanceamento = 100 - abs(ocupacao_volume - ocupacao_peso)
-
-    score = (
-        ocupacao_volume * 0.35 +
-        ocupacao_peso * 0.35 +
-        balanceamento * 0.2
-    )
-
-    return max(0, min(round(score, 2), 100))
 # ============================
 # EXPORTAR RESULTADOS PARA EXCEL
 # ============================
@@ -431,9 +414,78 @@ def cabe_no_piso_heuristica(cargas_unitarias, veh_comp, veh_larg, veh_alt):
 
     return True
 
+def calcular_multi_veiculos(cargas, df_veiculos):
+
+    cargas_unit = expand_cargas_unitarias(cargas)
+
+    # ordenar cargas maiores primeiro
+    cargas_unit = sorted(
+        cargas_unit,
+        key=lambda x: x["comp"] * x["larg"] * x["alt"],
+        reverse=True
+    )
+
+    # ordenar veículos do maior para o menor
+    veiculos_ordenados = df_veiculos.sort_values(
+        by="Capacidade Volume (m³)",
+        ascending=False
+    )
+
+    resultado = []
+    cargas_restantes = cargas_unit.copy()
+
+    for _, veic in veiculos_ordenados.iterrows():
+
+        if not cargas_restantes:
+            break
+
+        comp_v = veic["comprimento"]
+        larg_v = veic["largura"]
+        alt_v  = veic["altura"]
+        peso_max = veic["peso_max"]
+
+        alocadas = []
+        peso_total = 0
+
+        for carga in cargas_restantes[:]:
+
+            # valida peso
+            if peso_total + carga["peso"] > peso_max:
+                continue
+
+            # valida espaço
+            cabe = cabe_no_piso_heuristica(
+                alocadas + [carga],
+                comp_v,
+                larg_v,
+                alt_v
+            )
+
+            if cabe:
+                alocadas.append(carga)
+                cargas_restantes.remove(carga)
+                peso_total += carga["peso"]
+
+        if alocadas:
+            resultado.append({
+                "Veículo": veic["Veículo"],
+                "Qtd Caixas": len(alocadas),
+                "Peso Total (kg)": round(peso_total, 2)
+            })
+
+    return resultado, len(cargas_restantes)
 
 # ============================
-# BOTÃO CALCULAR (VERSÃO PROFISSIONAL)
+# 🧠 SELETOR DE MODO
+# ============================
+modo = st.radio(
+    "🧠 Tipo de cálculo:",
+    ["Melhor veículo", "Multi-veículo"],
+    horizontal=True
+)
+
+# ============================
+# 🚀 BOTÃO CALCULAR
 # ============================
 if st.button("🚀 Calcular Dimensionamento"):
 
@@ -441,32 +493,49 @@ if st.button("🚀 Calcular Dimensionamento"):
         st.warning("Adicione pelo menos uma carga.")
         st.stop()
 
-    resultados = []
-
+    # seleção de veículos
     if selecionados:
         df_testar = df_veiculos[df_veiculos["Veículo"].isin(selecionados)]
     else:
         df_testar = df_veiculos
 
-    # 🔢 Totais reais
+    # totais reais
     volume_total_carga, peso_total = calcular_totais(st.session_state.cargas)
 
-    cargas_unitarias = expand_cargas_unitarias(st.session_state.cargas)
-    st.session_state.cargas_unitarias = cargas_unitarias
+    # ============================
+    # 🔥 MODO MULTI-VEÍCULO
+    # ============================
+    if modo == "Multi-veículo":
 
-    cargas_unitarias_3d = sorted(
-        cargas_unitarias,
-        key=lambda x: x["comp"] * x["larg"] * x["alt"],
-        reverse=True
-    )
-    
-    if not cargas_unitarias_3d:
-        st.error("Nenhuma carga válida para simulação.")
+        resultado_multi, nao_alocadas = calcular_multi_veiculos(
+            st.session_state.cargas,
+            df_testar
+        )
+        
+        df_result = pd.DataFrame(resultado_multi)
+        
+        if nao_alocadas > 0:
+            st.warning(f"⚠️ {nao_alocadas} caixas não foram alocadas.")
+        
+        st.session_state.df_result = df_result
+        
+        st.success("🚚 Plano multi-veículo REAL gerado com sucesso!")
+        st.dataframe(df_result, use_container_width=True)
+        
         st.stop()
 
     # ============================
-    # LOOP VEÍCULOS
+    # 🟢 MODO MELHOR VEÍCULO
     # ============================
+
+    resultados = []
+
+    cargas_unitarias = expand_cargas_unitarias(st.session_state.cargas)
+
+    if not cargas_unitarias:
+        st.error("Nenhuma carga válida para simulação.")
+        st.stop()
+
     for _, veic in df_testar.iterrows():
 
         comp_v = veic["comprimento"]
@@ -479,17 +548,17 @@ if st.button("🚀 Calcular Dimensionamento"):
         status = "Viável"
         motivo = ""
 
-        # 🔴 VERIFICA VOLUME
+        # valida volume
         if volume_total_carga > volume_veiculo:
             status = "Inviável"
             motivo = "Excede volume do veículo"
 
-        # 🔴 VERIFICA PESO
+        # valida peso
         elif peso_total > peso_max:
             status = "Inviável"
             motivo = "Excede peso máximo permitido"
 
-        # 🔴 VERIFICA EMPILHAMENTO
+        # valida dimensão real
         else:
             cabe = cabe_no_piso_heuristica(
                 cargas_unitarias,
@@ -500,9 +569,9 @@ if st.button("🚀 Calcular Dimensionamento"):
 
             if not cabe:
                 status = "Inviável"
-                motivo = "Não cabe fisicamente (dimensão incompatível)"
+                motivo = "Não cabe fisicamente"
 
-        # 🚫 SE INVIÁVEL
+        # inviável
         if status == "Inviável":
             resultados.append({
                 "Veículo": veic["Veículo"],
@@ -514,7 +583,7 @@ if st.button("🚀 Calcular Dimensionamento"):
             })
             continue
 
-        # ✅ SE VIÁVEL
+        # viável
         aproveitamento_volume = round(
             (volume_total_carga / volume_veiculo) * 100, 2
         )
@@ -523,23 +592,17 @@ if st.button("🚀 Calcular Dimensionamento"):
             (peso_total / peso_max) * 100, 2
         )
 
-        # ============================
-        # EFICIÊNCIA REALISTA
-        # ============================
-       
         ociosidade = 100 - aproveitamento_volume
-        
-        penalidade_espaco = ociosidade * 0.3
-        
+        penalidade = ociosidade * 0.3
         balanceamento = 100 - abs(aproveitamento_volume - aproveitamento_peso)
-        
+
         score = (
             (aproveitamento_volume * 0.35) +
             (aproveitamento_peso * 0.35) +
             (balanceamento * 0.2) -
-            penalidade_espaco
+            penalidade
         )
-        
+
         score = max(0, round(score, 2))
 
         resultados.append({
@@ -578,12 +641,11 @@ if (
     st.info("Clique em calcular para gerar o dimensionamento.")
     st.stop()
 
-df_viaveis = df_base.loc[df_base["Status"] == "Viável"].copy()
-
-if df_viaveis.empty:
-    st.warning("⚠ Nenhum veículo viável encontrado.")
+if "Status" not in df_base.columns:
+    st.warning("⚠️ Resultado exibido no modo multi-veículo (sem ranking).")
+    st.dataframe(df_base, use_container_width=True)
     st.stop()
-
+    
 df_viaveis = df_base[df_base["Status"] == "Viável"].copy()
 
 if df_viaveis.empty:
@@ -598,11 +660,7 @@ df_viaveis = df_viaveis.sort_values(
 df_viaveis["Ranking"] = df_viaveis.index + 1
 
 if df_viaveis.empty:
-    st.warning("⚠ Nenhum veículo viável encontrado.")
-    st.stop()
-
-if df_viaveis.empty:
-    st.warning("⚠ Nenhum veículo viável encontrado.")
+    st.error("❌ Nenhum veículo disponível para simulação.")
     st.stop()
 
 melhor_veiculo = df_viaveis.iloc[0]["Veículo"]
@@ -697,21 +755,32 @@ if st.button("🔍 Simular Empilhamento"):
     qtd_total = sum(c["Quantidade"] for c in st.session_state.cargas)
     volume_total_carga, peso_total = calcular_totais(st.session_state.cargas)
 
-    cargas_unitarias = expand_cargas_unitarias(st.session_state.cargas)
+    cargas_unitarias = expand_cargas_unitarias(st.session_state.cargas, limite=300)
 
-    df_viaveis = st.session_state.df_result[
-        st.session_state.df_result["Status"] == "Viável"
-    ].copy()
+    # ✅ AGORA SIM DENTRO DO BOTÃO
+    if "Status" in st.session_state.df_result.columns:
+        df_viaveis = st.session_state.df_result[
+            st.session_state.df_result["Status"] == "Viável"
+        ].copy()
+    else:
+        st.warning("Modo multi-veículo não suporta simulação de empilhamento.")
+        st.stop()
     
+    # fora do else
     if df_viaveis is None or df_viaveis.empty:
         st.error("❌ Nenhum veículo viável encontrado.")
         st.stop()
 
-    df_viaveis = df_viaveis.dropna(subset=["Score"]).sort_values(
-        by="Score",
-        ascending=False
-    ).reset_index(drop=True)
-    df_viaveis = df_viaveis.dropna(subset=["Score"])
+    df_viaveis = (
+        df_viaveis
+        .dropna(subset=["Score"])
+        .sort_values(by="Score", ascending=False)
+        .reset_index(drop=True)
+    )
+    
+    if df_viaveis.empty:
+        st.error("❌ Nenhum veículo válido com score.")
+        st.stop()
     melhor_veiculo = df_viaveis.iloc[0]["Veículo"]
     
     veic = df_veiculos[df_veiculos["Veículo"] == melhor_veiculo].iloc[0]
@@ -733,6 +802,8 @@ if st.button("🔍 Simular Empilhamento"):
 
     posicoes_ocupadas = []
     caixas_alocadas = 0
+    peso_acumulado = 0
+    peso_max = veic["peso_max"]
 
     limite_iter = 5000
     contador = 0
@@ -795,10 +866,15 @@ if st.button("🔍 Simular Empilhamento"):
             
                         if not tem_base(nova_caixa, posicoes_ocupadas):
                             continue
-            
+                                    
+                        # valida peso antes de alocar
+                        if peso_acumulado + item["peso"] > peso_max:
+                            continue
+                        
                         posicoes_ocupadas.append(nova_caixa)
                         caixas_alocadas += 1
-            
+                        peso_acumulado += item["peso"]
+                                    
                         if caixas_alocadas >= qtd_total:
                             encaixou = True
                             estourou_limite = True
@@ -820,19 +896,30 @@ if st.button("🔍 Simular Empilhamento"):
     )
 
     # 🔥 usar MESMA lógica do score do ranking
+    aproveitamento_volume = ocupacao
+    aproveitamento_peso = (peso_total / veic["peso_max"]) * 100
+    
+    balanceamento = 100 - abs(aproveitamento_volume - aproveitamento_peso)
+    ociosidade = 100 - aproveitamento_volume
+    penalidade = ociosidade * 0.3
+    
     eficiencia = (
-        (ocupacao * 0.5) +
-        ((peso_total / veic["peso_max"]) * 100 * 0.5)
+        (aproveitamento_volume * 0.35) +
+        (aproveitamento_peso * 0.35) +
+        (balanceamento * 0.2) -
+        penalidade
     )
     
-    eficiencia = max(0, min(100, round(eficiencia, 2)))
-
+    eficiencia = round(max(0, min(100, eficiencia)), 2)
+    
     st.write("### 📊 Resultado da Simulação")
     st.write(f"Veículo: {melhor_veiculo}")
     st.write(f"Volume utilizado: {volume_usado:.2f} m³")
     st.write(f"Ocupação: {ocupacao:.2f}%")
     st.write(f"Caixas alocadas: {caixas_alocadas}")
     st.write(f"Eficiência: {eficiencia:.1f}%")
+    st.write(f"Peso total carregado: {peso_acumulado:.2f} kg")
+    st.write(f"Capacidade máxima do veículo: {peso_max:.2f} kg")
 
     if caixas_alocadas < qtd_total:
         st.error("⚠️ Nem todas as caixas couberam.")
