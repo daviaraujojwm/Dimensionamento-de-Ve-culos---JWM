@@ -279,6 +279,13 @@ def expand_cargas_unitarias(cargas, limite=300):
     total_original = sum(c["Quantidade"] for c in cargas)
 
     for c in cargas:
+        if (
+            c["Comprimento (m)"] <= 0 or
+            c["Largura (m)"] <= 0 or
+            c["Altura (m)"] <= 0
+        ):
+            continue
+
         for _ in range(c["Quantidade"]):
 
             if len(lista) >= limite:
@@ -289,10 +296,10 @@ def expand_cargas_unitarias(cargas, limite=300):
                 return lista
 
             lista.append({
-                "comp": c["Comprimento (m)"],
-                "larg": c["Largura (m)"],
-                "alt": c["Altura (m)"],
-                "peso": c["Peso unitário (kg)"],
+                "comp": float(c["Comprimento (m)"]),
+                "larg": float(c["Largura (m)"]),
+                "alt": float(c["Altura (m)"]),
+                "peso": float(c["Peso unitário (kg)"]),
             })
 
     return lista
@@ -306,18 +313,18 @@ def calcular_eficiencia(volume_usado, volume_total, peso_total, peso_max):
     if volume_total == 0 or peso_max == 0:
         return 0
 
-    ocupacao_volume = volume_usado / volume_total
-    ocupacao_peso = peso_total / peso_max
+    ocupacao_volume = (volume_usado / volume_total) * 100
+    ocupacao_peso = (peso_total / peso_max) * 100
 
-    balanceamento = 1 - abs(ocupacao_volume - ocupacao_peso)
+    balanceamento = 100 - abs(ocupacao_volume - ocupacao_peso)
 
     score = (
-        ocupacao_volume * 0.4 +
-        ocupacao_peso * 0.4 +
+        ocupacao_volume * 0.35 +
+        ocupacao_peso * 0.35 +
         balanceamento * 0.2
     )
 
-    return round(max(0, min(score * 100, 100)), 2)
+    return max(0, min(round(score, 2), 100))
 # ============================
 # EXPORTAR RESULTADOS PARA EXCEL
 # ============================
@@ -337,9 +344,11 @@ def gerar_excel_bytes(df_result, cargas):
                 "Aviso": ["Sem dados disponíveis para exportação"]
             }).to_excel(writer, sheet_name="Resultados", index=False)
 
-        if cargas is not None and len(cargas) > 0:
+        if isinstance(cargas, list) and len(cargas) > 0:
             df_cargas = pd.DataFrame(cargas)
-            df_cargas.to_excel(writer, sheet_name="Cargas", index=False)
+        
+            if not df_cargas.empty:
+                df_cargas.to_excel(writer, sheet_name="Cargas", index=False)
 
     out.seek(0)
     return out
@@ -561,8 +570,18 @@ if st.button("🚀 Calcular Dimensionamento"):
 
 df_base = st.session_state.df_result
 
-if not isinstance(df_base, pd.DataFrame) or df_base.empty or "Status" not in df_base.columns:
+if (
+    not isinstance(df_base, pd.DataFrame)
+    or df_base.empty
+    or "Status" not in df_base.columns
+):
     st.info("Clique em calcular para gerar o dimensionamento.")
+    st.stop()
+
+df_viaveis = df_base.loc[df_base["Status"] == "Viável"].copy()
+
+if df_viaveis.empty:
+    st.warning("⚠ Nenhum veículo viável encontrado.")
     st.stop()
 
 df_viaveis = df_base[df_base["Status"] == "Viável"].copy()
@@ -571,38 +590,40 @@ if df_viaveis.empty:
     st.warning("⚠ Nenhum veículo viável encontrado.")
     st.stop()
 
-df_viaveis = df_viaveis.sort_values(by="Score", ascending=False).reset_index(drop=True)
+df_viaveis = df_viaveis.sort_values(
+    by="Score",
+    ascending=False
+).reset_index(drop=True)
+
 df_viaveis["Ranking"] = df_viaveis.index + 1
 
-    if not df_viaveis.empty:
+if df_viaveis.empty:
+    st.warning("⚠ Nenhum veículo viável encontrado.")
+    st.stop()
 
-        # ordena por score
-        df_viaveis = df_viaveis.sort_values(
-            by="Score",
-            ascending=False
-        ).reset_index(drop=True)
-        
-        # ranking
-        df_viaveis["Ranking"] = df_viaveis.index + 1
-        
-        melhor_veiculo = df_viaveis.iloc[0]["Veículo"]
-        
-        def destacar(row):
-            if row["Veículo"] == melhor_veiculo:
-                return ["background-color:#145A32;color:white;font-weight:bold"] * len(row)
-            return [""] * len(row)
-        
-        st.subheader("🏆 Veículos Viáveis (Ranking)")
-        
-        st.dataframe(
-            df_viaveis.style.apply(destacar, axis=1),
-            use_container_width=True
-        )
-        # ============================
-        # 🧠 EXPLICAÇÃO DO MELHOR VEÍCULO
-        # ============================
+if df_viaveis.empty:
+    st.warning("⚠ Nenhum veículo viável encontrado.")
+    st.stop()
 
-        melhor_linha = df_viaveis.iloc[0]
+melhor_veiculo = df_viaveis.iloc[0]["Veículo"]
+
+def destacar(row):
+    if row["Veículo"] == melhor_veiculo:
+        return ["background-color:#145A32;color:white;font-weight:bold"] * len(row)
+    return [""] * len(row)
+
+st.subheader("🏆 Veículos Viáveis (Ranking)")
+
+st.dataframe(
+    df_viaveis.style.apply(destacar, axis=1),
+    use_container_width=True
+)
+
+# ============================
+# 🧠 EXPLICAÇÃO DO MELHOR VEÍCULO
+# ============================
+
+melhor_linha = df_viaveis.iloc[0]
         
         vol = float(melhor_linha.get("Aproveitamento Volume (%)", 0) or 0)
         peso = float(melhor_linha.get("Aproveitamento Peso (%)", 0) or 0)
@@ -629,12 +650,6 @@ df_viaveis["Ranking"] = df_viaveis.index + 1
 💡 {motivo}
 """
         )
-
-    else:
-        st.warning("⚠ Nenhum veículo é viável para essa carga.")
-
-else:
-    st.info("Clique em calcular para gerar o dimensionamento.")
 
 def colide(nova, ocupadas):
     x, y, z, dx, dy, dz = nova
@@ -698,8 +713,9 @@ if st.button("🔍 Simular Empilhamento"):
         ascending=False
     ).reset_index(drop=True)
     df_viaveis = df_viaveis.dropna(subset=["Score"])
-    melhor = df_viaveis.iloc[0]
-    veic = df_veiculos[df_veiculos["Veículo"] == melhor["Veículo"]].iloc[0]
+    melhor_veiculo = df_viaveis.iloc[0]["Veículo"]
+    
+    veic = df_veiculos[df_veiculos["Veículo"] == melhor_veiculo].iloc[0]
 
     comp_veic = veic["comprimento"]
     larg_veic = veic["largura"]
@@ -722,7 +738,7 @@ if st.button("🔍 Simular Empilhamento"):
     limite_iter = 5000
     contador = 0
     estourou_limite = False
-
+    MAX_GRID = 10000  # proteção contra explosão de combinações
     for item in cargas_unitarias:
 
         if estourou_limite:
@@ -744,23 +760,28 @@ if st.button("🔍 Simular Empilhamento"):
             y_max = int(larg_veic // larg_o)
             z_max = int(alt_veic // alt_o)
 
-            if x_max <= 0 or y_max <= 0 or z_max <= 0:
-                continue
-
-           # 🔧 proteção contra explosão de combinações
-            if x_max * y_max * z_max > 20000:
+            grid_size = x_max * y_max * z_max
+            
+            if grid_size <= 0 or grid_size > MAX_GRID:
                 continue
             
             for x in range(x_max):
+                if estourou_limite:
+                    break
+            
                 for y in range(y_max):
+                    if estourou_limite:
+                        break
+            
                     for z in range(z_max):
+            
                         contador += 1
-
+            
                         if contador > limite_iter:
                             st.warning("Limite de simulação atingido.")
                             estourou_limite = True
                             break
-
+            
                         nova_caixa = (
                             x * comp_o,
                             y * larg_o,
@@ -769,27 +790,25 @@ if st.button("🔍 Simular Empilhamento"):
                             larg_o,
                             alt_o
                         )
-
+            
                         if colide(nova_caixa, posicoes_ocupadas):
                             continue
-
+            
                         if not tem_base(nova_caixa, posicoes_ocupadas):
                             continue
-
+            
                         posicoes_ocupadas.append(nova_caixa)
                         caixas_alocadas += 1
-
+            
                         if caixas_alocadas >= qtd_total:
                             encaixou = True
                             estourou_limite = True
                             break
-
+            
                     if encaixou or estourou_limite:
                         break
                 if encaixou or estourou_limite:
                     break
-            if encaixou or estourou_limite:
-                break
 
     volume_usado = sum(
         float(c) * float(l) * float(a)
@@ -810,7 +829,7 @@ if st.button("🔍 Simular Empilhamento"):
     eficiencia = max(0, min(100, round(eficiencia, 2)))
 
     st.write("### 📊 Resultado da Simulação")
-    st.write(f"Veículo: {melhor['Veículo']}")
+    st.write(f"Veículo: {melhor_veiculo}")
     st.write(f"Volume utilizado: {volume_usado:.2f} m³")
     st.write(f"Ocupação: {ocupacao:.2f}%")
     st.write(f"Caixas alocadas: {caixas_alocadas}")
