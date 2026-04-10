@@ -624,22 +624,22 @@ st.dataframe(
 # ============================
 
 melhor_linha = df_viaveis.iloc[0]
-        
-        vol = float(melhor_linha.get("Aproveitamento Volume (%)", 0) or 0)
-        peso = float(melhor_linha.get("Aproveitamento Peso (%)", 0) or 0)
-        score = float(melhor_linha.get("Score", 0) or 0)
 
-        # 🔍 lógica de explicação
-        if abs(vol - peso) < 10:
-            motivo = "Possui ótimo balanceamento entre peso e volume"
-        elif vol > peso:
-            motivo = "Aproveita melhor o espaço do veículo (volume)"
-        else:
-            motivo = "Aproveita melhor a capacidade de carga (peso)"
+vol = float(melhor_linha.get("Aproveitamento Volume (%)", 0) or 0)
+peso = float(melhor_linha.get("Aproveitamento Peso (%)", 0) or 0)
+score = float(melhor_linha.get("Score", 0) or 0)
 
-        # 🔥 EXIBIÇÃO PROFISSIONAL
-        st.success(
-            f"""
+# 🔍 lógica de explicação
+if abs(vol - peso) < 10:
+    motivo = "Possui ótimo balanceamento entre peso e volume"
+elif vol > peso:
+    motivo = "Aproveita melhor o espaço do veículo (volume)"
+else:
+    motivo = "Aproveita melhor a capacidade de carga (peso)"
+
+# 🔥 EXIBIÇÃO PROFISSIONAL
+st.success(
+    f"""
 🏆 **Melhor escolha:** {melhor_veiculo}
 
 📊 **Por quê?**
@@ -649,8 +649,7 @@ melhor_linha = df_viaveis.iloc[0]
 
 💡 {motivo}
 """
-        )
-
+)
 def colide(nova, ocupadas):
     x, y, z, dx, dy, dz = nova
 
