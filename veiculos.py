@@ -457,6 +457,7 @@ def cabe_no_piso_heuristica(cargas_unitarias, veh_comp, veh_larg, veh_alt):
 def calcular_multi_veiculos(cargas, df_veiculos):
 
     cargas_unit = expand_cargas_unitarias(cargas, limite=MAX_CAIXAS)
+
     # ordenar cargas maiores primeiro
     cargas_unit = sorted(
         cargas_unit,
@@ -464,7 +465,7 @@ def calcular_multi_veiculos(cargas, df_veiculos):
         reverse=True
     )
 
-    # ordenar veículos do maior para o menor
+    # ordenar veículos
     veiculos_ordenados = df_veiculos.sort_values(
         by="Capacidade Volume (m³)",
         ascending=True
@@ -473,68 +474,67 @@ def calcular_multi_veiculos(cargas, df_veiculos):
     resultado = []
     cargas_restantes = cargas_unit.copy()
     
-    # 🔴 alerta de cargas impossíveis
+    # alerta de cargas impossíveis
     if any(c["peso"] > df_veiculos["peso_max"].max() for c in cargas_restantes):
         st.warning("⚠ Existem cargas com peso maior que qualquer veículo disponível.")
 
-while cargas_restantes:
+    # ✅ TUDO DENTRO DA FUNÇÃO
+    while cargas_restantes:
 
-    alocou_algum = False
+        alocou_algum = False
 
-    for _, veic in veiculos_ordenados.iterrows():
+        for _, veic in veiculos_ordenados.iterrows():
 
-        if not cargas_restantes:
+            if not cargas_restantes:
+                break
+
+            comp_v = veic["comprimento"]
+            larg_v = veic["largura"]
+            alt_v = veic["altura"]
+            peso_max = veic["peso_max"]
+
+            alocadas = []
+            peso_total = 0
+            volume_ocupado = 0
+            novas_restantes = []
+
+            for carga in cargas_restantes:
+
+                volume_carga = carga["volume"]
+
+                if (
+                    peso_total + carga["peso"] > peso_max or
+                    volume_ocupado + volume_carga > (comp_v * larg_v * alt_v)
+                ):
+                    novas_restantes.append(carga)
+                    continue
+
+                cabe = cabe_no_piso_heuristica(
+                    alocadas + [carga],
+                    comp_v,
+                    larg_v,
+                    alt_v
+                )
+
+                if cabe:
+                    alocadas.append(carga)
+                    peso_total += carga["peso"]
+                    volume_ocupado += volume_carga
+                    alocou_algum = True
+                else:
+                    novas_restantes.append(carga)
+
+            if alocadas:
+                resultado.append({
+                    "Veículo": veic["Veículo"],
+                    "Qtd Caixas": len(alocadas),
+                    "Peso Total (kg)": round(peso_total, 2)
+                })
+
+            cargas_restantes = novas_restantes
+
+        if not alocou_algum:
             break
-
-        comp_v, larg_v, alt_v, peso_max = (
-            veic["comprimento"],
-            veic["largura"],
-            veic["altura"],
-            veic["peso_max"]
-        )
-
-        alocadas = []
-        peso_total = 0
-        volume_ocupado = 0
-        novas_restantes = []
-
-        for carga in cargas_restantes:
-
-            volume_carga = carga["volume"]
-
-            if (
-                peso_total + carga["peso"] > peso_max or
-                volume_ocupado + volume_carga > (comp_v * larg_v * alt_v)
-            ):
-                novas_restantes.append(carga)
-                continue
-
-            cabe = cabe_no_piso_heuristica(
-                alocadas + [carga],
-                comp_v,
-                larg_v,
-                alt_v
-            )
-
-            if cabe:
-                alocadas.append(carga)
-                peso_total += carga["peso"]
-                volume_ocupado += volume_carga
-                alocou_algum = True
-            else:
-                novas_restantes.append(carga)
-
-        if alocadas:
-            resultado.append({
-                "Veículo": veic["Veículo"],
-                "Qtd Caixas": len(alocadas),
-                "Peso Total (kg)": round(peso_total, 2)
-            })
-
-        cargas_restantes = novas_restantes
-
-    if not alocou_algum:
-        break
 
     return resultado, len(cargas_restantes)
 def simular_cenario(cargas, veiculos_usados, df_veiculos):
