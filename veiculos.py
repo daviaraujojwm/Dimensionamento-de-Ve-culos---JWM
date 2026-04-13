@@ -124,61 +124,110 @@ with col2:
 # ============================
 st.subheader("📦 Adicionar carga")
 
-col1, col2, col3, col4 = st.columns(4)
+def parse_float(valor):
+    try:
+        if valor is None:
+            return None
+        valor = str(valor).strip().replace(",", ".")
+        if valor == "":
+            return None
+        return float(valor)
+    except:
+        return None
+
+
+col1, col2, col3, col4, col5 = st.columns(5)
 
 with col1:
-    comp = round(st.number_input("Comprimento (m):", min_value=0.0, step=0.01, format="%.2f", key="comp"), 2)
+    comp_txt = st.text_input("Comprimento (m)", placeholder="ex: 1,20 ou 1.20")
+
 with col2:
-    larg = round(st.number_input("Largura (m):", min_value=0.0, step=0.01, format="%.2f", key="larg"), 2)
+    larg_txt = st.text_input("Largura (m)", placeholder="ex: 0,80 ou 0.80")
+
 with col3:
-    alt = round(st.number_input("Altura (m):", min_value=0.0, step=0.01, format="%.2f", key="alt"), 2)
+    alt_txt = st.text_input("Altura (m)", placeholder="ex: 1,00")
+
 with col4:
-    peso = round(st.number_input("Peso unitário (kg):", min_value=0.0, step=0.01, format="%.2f", key="peso"), 2)
+    peso_txt = st.text_input("Peso unitário (kg)", placeholder="ex: 15,5")
 
-qtd = st.number_input("Quantidade:", min_value=1, value=1, step=1, key="qtd")
+with col5:
+    qtd = st.number_input("Quantidade:", min_value=1, value=1, step=1)
 
+
+# conversão
+comp = parse_float(comp_txt)
+larg = parse_float(larg_txt)
+alt = parse_float(alt_txt)
+peso = parse_float(peso_txt)
+
+
+erros = []
+
+for nome, val in [
+    ("Comprimento", comp),
+    ("Largura", larg),
+    ("Altura", alt),
+    ("Peso", peso)
+]:
+    if val is None or val <= 0:
+        erros.append(f"{nome} inválido")
+
+if qtd > 1000:
+    st.warning("⚠ Quantidade muito alta pode impactar a performance")
+
+pode_adicionar = len(erros) == 0
+
+if erros:
+    st.error(" | ".join(erros))
+
+if st.button("➕ Adicionar carga", disabled=not pode_adicionar):
+
+    st.session_state.cargas.append({
+        "Comprimento (m)": comp,
+        "Largura (m)": larg,
+        "Altura (m)": alt,
+        "Peso unitário (kg)": peso,
+        "Quantidade": qtd,
+        "Volume total (m³)": comp * larg * alt * qtd,
+        "Peso total (kg)": peso * qtd
+    })
+
+    st.success("Carga adicionada com sucesso!")
+    st.session_state.clear_inputs = True
+    st.rerun()
+
+# ============================
+# VALIDAÇÃO ÚNICA (CORRIGIDO)
+# ============================
+
+def is_valid(x):
+    return x is not None and x > 0
+
+
+erros = []
+
+# validações principais
+if not is_valid(comp):
+    erros.append("Comprimento inválido")
+
+if not is_valid(larg):
+    erros.append("Largura inválida")
+
+if not is_valid(alt):
+    erros.append("Altura inválida")
+
+if not is_valid(peso):
+    erros.append("Peso inválido")
+
+# aviso de performance
 if qtd > 1000:
     st.warning("⚠ Quantidade muito alta pode impactar a performance.")
 
+# controle final
+pode_adicionar = len(erros) == 0
 
-# ============================
-# ADICIONAR CARGA
-# ============================
-if st.button("➕ Adicionar carga"):
-    try:
-        c = float(comp)
-        l = float(larg)
-        a = float(alt)
-        p = float(peso)
-
-        if c == 0 or l == 0 or a == 0 or p == 0:
-            st.warning("Preencha todos os campos corretamente.")
-            st.stop()
-        
-        if c <= 0 or l <= 0 or a <= 0:
-            raise ValueError("Dimensões devem ser maiores que zero.")
-        
-        if p <= 0:
-            raise ValueError("Peso deve ser maior que zero.")
-
-        vol_unit = c * l * a
-        peso_total = p * qtd
-
-        st.session_state.cargas.append({
-            "Comprimento (m)": c,
-            "Largura (m)": l,
-            "Altura (m)": a,
-            "Peso unitário (kg)": p,
-            "Quantidade": qtd,
-            "Volume total (m³)": vol_unit * qtd,
-            "Peso total (kg)": peso_total
-        })
-
-        st.session_state.clear_inputs = True
-        st.rerun()
-
-    except Exception as e:
-        st.error(f"Erro ao adicionar carga: {e}")
+if erros:
+    st.error(" | ".join(erros))
 
 # ============================
 # LISTA E EDIÇÃO DE CARGAS
