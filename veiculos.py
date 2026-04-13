@@ -91,20 +91,21 @@ df_veiculos = get_veiculos()
 # ============================
 if "cargas" not in st.session_state:
     st.session_state.cargas = []
-if "to_delete" not in st.session_state:
-    st.session_state.to_delete = None
-if "clear_inputs" not in st.session_state:
-    st.session_state.clear_inputs = False
+
+if "df_result" not in st.session_state:
+    st.session_state.df_result = pd.DataFrame()
 
 # ============================
 # RESET DE INPUTS
 # ============================
-if st.session_state.clear_inputs:
-    st.session_state["comp"] = ""
-    st.session_state["larg"] = ""
-    st.session_state["alt"] = ""
-    st.session_state["peso"] = ""
-    st.session_state["qtd"] = 1
+if st.session_state.get("clear_inputs"):
+    st.session_state.update({
+        "comp": "",
+        "larg": "",
+        "alt": "",
+        "peso": "",
+        "qtd": 1
+    })
     st.session_state.clear_inputs = False
 
 # ============================
@@ -161,25 +162,48 @@ alt = parse_float(alt_txt)
 peso = parse_float(peso_txt)
 
 
-erros = []
+def validar_inputs(comp, larg, alt, peso, qtd):
+    """
+    Validação centralizada de inputs da carga.
+    Retorna lista de erros (vazia se válido).
+    """
+    erros = []
 
-for nome, val in [
-    ("Comprimento", comp),
-    ("Largura", larg),
-    ("Altura", alt),
-    ("Peso", peso)
-]:
-    if val is None or val <= 0:
-        erros.append(f"{nome} inválido")
+    def check(nome, valor):
+        try:
+            if valor is None or float(valor) <= 0:
+                erros.append(f"{nome} inválido")
+        except:
+            erros.append(f"{nome} inválido")
 
-if qtd > 1000:
-    st.warning("⚠ Quantidade muito alta pode impactar a performance")
+    check("Comprimento", comp)
+    check("Largura", larg)
+    check("Altura", alt)
+    check("Peso", peso)
 
+    if qtd is None or qtd <= 0:
+        erros.append("Quantidade inválida")
+
+    return erros
+
+
+# USO CORRETO (UMA SÓ VEZ)
+erros = validar_inputs(comp, larg, alt, peso, qtd)
 pode_adicionar = len(erros) == 0
 
 if erros:
     st.error(" | ".join(erros))
+    st.stop()
 
+# validação primeiro (ANTES do botão)
+erros = validar_inputs(comp, larg, alt, peso, qtd)
+
+if erros:
+    st.error(" | ".join(erros))
+    pode_adicionar = False
+else:
+    pode_adicionar = True
+# botão corrigido
 if st.button("➕ Adicionar carga", disabled=not pode_adicionar):
 
     st.session_state.cargas.append({
@@ -194,30 +218,40 @@ if st.button("➕ Adicionar carga", disabled=not pode_adicionar):
 
     st.success("Carga adicionada com sucesso!")
     st.session_state.clear_inputs = True
-    st.rerun()
+
+# exibir erros (opcional mas recomendado)
+if erros:
+    st.error(" | ".join(erros))
 
 # ============================
 # VALIDAÇÃO ÚNICA (CORRIGIDO)
 # ============================
 
 def is_valid(x):
-    return x is not None and x > 0
+    try:
+        return x is not None and float(x) > 0
+    except:
+        return False
+
+def validar_inputs(comp, larg, alt, peso):
+    erros = []
+
+    valores = {
+        "Comprimento": comp,
+        "Largura": larg,
+        "Altura": alt,
+        "Peso": peso
+    }
+
+    for nome, valor in valores.items():
+        if valor is None or valor <= 0:
+            erros.append(f"{nome} inválido")
+
+    return erros
 
 
-erros = []
-
-# validações principais
-if not is_valid(comp):
-    erros.append("Comprimento inválido")
-
-if not is_valid(larg):
-    erros.append("Largura inválida")
-
-if not is_valid(alt):
-    erros.append("Altura inválida")
-
-if not is_valid(peso):
-    erros.append("Peso inválido")
+erros = validar_inputs(comp, larg, alt, peso)
+pode_adicionar = len(erros) == 0
 
 # aviso de performance
 if qtd > 1000:
@@ -338,48 +372,80 @@ selecionados = st.multiselect(
 # AUXILIARES
 # ============================
 def expand_cargas_unitarias(cargas, limite=MAX_CAIXAS):
+    """
+    Expande cargas em unidades individuais.
+    Função pura (sem Streamlit).
+    """
     lista = []
-    total_original = sum(c["Quantidade"] for c in cargas)
 
     for c in cargas:
-    
-        if c["Peso unitário (kg)"] <= 0:
-            continue
-        if (
-            c["Comprimento (m)"] <= 0 or
-            c["Largura (m)"] <= 0 or
-            c["Altura (m)"] <= 0
-        ):
+        qtd = int(c.get("Quantidade", 0))
+
+        comp = float(c["Comprimento (m)"])
+        larg = float(c["Largura (m)"])
+        alt = float(c["Altura (m)"])
+        peso = float(c["Peso unitário (kg)"])
+
+        if qtd <= 0 or comp <= 0 or larg <= 0 or alt <= 0 or peso <= 0:
             continue
 
-        for _ in range(c["Quantidade"]):
-        
+        for _ in range(qtd):
             if len(lista) >= limite:
-                st.warning(
-                    f"⚠ Limite de simulação atingido ({limite} caixas). "
-                    f"Total real: {total_original}"
-                )
                 return lista
-        
-            comp = float(c["Comprimento (m)"])
-            larg = float(c["Largura (m)"])
-            alt = float(c["Altura (m)"])
-            
+
             lista.append({
                 "comp": comp,
                 "larg": larg,
                 "alt": alt,
-                "peso": float(c["Peso unitário (kg)"]),
+                "peso": peso,
                 "volume": comp * larg * alt
             })
 
-    return lista
+    def expand_cargas_unitarias(cargas, limite=MAX_CAIXAS):
+        lista = []
+    
+        for c in cargas:
+            qtd = int(c.get("Quantidade", 0))
+    
+            comp = float(c["Comprimento (m)"])
+            larg = float(c["Largura (m)"])
+            alt = float(c["Altura (m)"])
+            peso = float(c["Peso unitário (kg)"])
+    
+            if qtd <= 0 or comp <= 0 or larg <= 0 or alt <= 0 or peso <= 0:
+                continue
+    
+            for _ in range(qtd):
+                if len(lista) >= limite:
+                    return lista
+    
+                lista.append({
+                    "comp": comp,
+                    "larg": larg,
+                    "alt": alt,
+                    "peso": peso,
+                    "volume": comp * larg * alt
+                })
+    
+        return lista
 def calcular_totais(cargas):
-    volume = sum(item["Volume total (m³)"] for item in cargas)
-    peso = sum(
-        float(item.get("Peso total (kg)", 0))
-        for item in cargas
-    )
+    """
+    Calcula volume e peso total de forma consistente.
+    """
+    volume = 0
+    peso = 0
+
+    for c in cargas:
+        qtd = float(c.get("Quantidade", 0))
+
+        comp = float(c["Comprimento (m)"])
+        larg = float(c["Largura (m)"])
+        alt = float(c["Altura (m)"])
+        peso_unit = float(c["Peso unitário (kg)"])
+
+        volume += comp * larg * alt * qtd
+        peso += peso_unit * qtd
+
     return volume, peso
 
 from itertools import combinations_with_replacement
@@ -422,10 +488,55 @@ def gerar_excel_bytes(df_result, cargas):
     return out
 
 
-# ============================
-# 🔴 COLE A FUNÇÃO AQUI
-# ============================
-def cabe_no_piso_heuristica(cargas_unitarias, veh_comp, veh_larg, veh_alt):
+def cabe_no_piso_heuristica(items, comp_v, larg_v, alt_v):
+    """
+    Heurística simplificada de empacotamento 2D + camadas.
+    """
+
+    if not items:
+        return True
+
+    items = sorted(
+        items,
+        key=lambda x: x["comp"] * x["larg"] * x["alt"],
+        reverse=True
+    )
+
+    camadas = []
+    altura_usada = 0
+
+    for it in items:
+
+        colocado = False
+
+        for comp_i, larg_i in [(it["comp"], it["larg"]), (it["larg"], it["comp"])]:
+
+            if comp_i > comp_v or larg_i > larg_v:
+                continue
+
+            # tenta encaixar em camada existente
+            for camada in camadas:
+                if camada["len"] + comp_i <= comp_v:
+                    camada["len"] += comp_i
+                    colocado = True
+                    break
+
+            if colocado:
+                break
+
+            # nova camada
+            if altura_usada + it["alt"] <= alt_v:
+                camadas.append({
+                    "len": comp_i
+                })
+                altura_usada += it["alt"]
+                colocado = True
+                break
+
+        if not colocado:
+            return False
+
+    return True
 
     if len(cargas_unitarias) > 80:
 
@@ -682,7 +793,18 @@ if btn_calcular:
         # ============================
         resultados = []
         
-        cargas_unitarias = expand_cargas_unitarias(st.session_state.cargas, limite=300)
+        if "cargas_unitarias" not in st.session_state:
+            st.session_state.cargas_unitarias = None
+        
+        def get_cargas_unitarias():
+            if st.session_state.cargas_unitarias is None:
+                st.session_state.cargas_unitarias = expand_cargas_unitarias(
+                    st.session_state.cargas,
+                    limite=MAX_CAIXAS
+                )
+            return st.session_state.cargas_unitarias
+        
+        cargas_unitarias = get_cargas_unitarias()
         
         for _, veic in df_testar.iterrows():
         
@@ -836,7 +958,7 @@ if btn_calcular:
         ociosidade = 100 - aproveitamento_volume
         balanceamento = 100 - abs(aproveitamento_volume - aproveitamento_peso)
         
-        penalidade_excesso = max(0, aproveitamento_peso - 100) * 2
+        penalidade_excesso = (max(0, aproveitamento_peso - 100) ** 1.5)
         
         score = (
             (aproveitamento_volume * 0.45) +
@@ -1124,15 +1246,17 @@ if st.button("🔍 Simular Empilhamento"):
             if grid_size <= 0:
                 continue
             
-            for x in range(x_max):
+            STEP = max(1, min(x_max, y_max, z_max) // 10)
+            
+            for x in range(0, x_max, STEP):
                 if estourou_limite:
                     break
             
-                for y in range(y_max):
+                for y in range(0, y_max, STEP):
                     if estourou_limite:
                         break
             
-                    for z in range(z_max):
+                    for z in range(0, z_max, STEP):
         
                         contador += 1
         
