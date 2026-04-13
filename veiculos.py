@@ -162,15 +162,15 @@ if st.button("➕ Adicionar carga"):
             raise ValueError("Peso deve ser maior que zero.")
 
         vol_unit = c * l * a
-        peso_total = p * q
+        peso_total = p * qtd
 
         st.session_state.cargas.append({
             "Comprimento (m)": c,
             "Largura (m)": l,
             "Altura (m)": a,
             "Peso unitário (kg)": p,
-            "Quantidade": q,
-            "Volume total (m³)": vol_unit * q,
+            "Quantidade": qtd,
+            "Volume total (m³)": vol_unit * qtd,
             "Peso total (kg)": peso_total
         })
 
@@ -506,7 +506,7 @@ def calcular_multi_veiculos(cargas, df_veiculos):
             ):
                 novas_restantes.append(carga)
                 continue
-                
+        
             cabe = cabe_no_piso_heuristica(
                 alocadas + [carga],
                 comp_v,
@@ -517,7 +517,7 @@ def calcular_multi_veiculos(cargas, df_veiculos):
             if cabe:
                 alocadas.append(carga)
                 peso_total += carga["peso"]
-                volume_ocupado += volume_carga
+                volume_ocupado += volume_carga 
             else:
                 novas_restantes.append(carga)
         
@@ -662,7 +662,7 @@ if btn_calcular:
                 melhor_cenario = cenario  # 🔥 novo
         
         # ✅ FORA DO LOOP
-        if melhor is None:
+        if melhor is None or len(melhor) == 0:
             st.error("❌ Nenhum cenário viável encontrado.")
             st.stop()
         
@@ -750,70 +750,41 @@ if btn_calcular:
             if not cabe:
                 status = "Inviável"
                 motivo = "Não cabe fisicamente"
-    
+            
         if status == "Inviável":
             resultados.append({
                 "Veículo": veic["Veículo"],
-                "Status": status,
+                "Status": "Inviável",
                 "Motivo": motivo,
-                "Aproveitamento Volume (%)": None,
-                "Aproveitamento Peso (%)": None,
-                "Score": None
+                "Aproveitamento Volume (%)": 0,
+                "Aproveitamento Peso (%)": 0,
+                "Score": 0
             })
             continue
-    
+        
+        # ✅ FORA do if (agora executa corretamente)
         aproveitamento_volume = round(
             (volume_total_carga / volume_veiculo) * 100, 2
         )
-    
+        
         aproveitamento_peso = round(
             (peso_total / peso_max) * 100, 2
         ) if peso_max > 0 else 0
-    
+        
         ociosidade = 100 - aproveitamento_volume
         balanceamento = 100 - abs(aproveitamento_volume - aproveitamento_peso)
-    
+        
+        penalidade_excesso = max(0, aproveitamento_peso - 100) * 2
+        
         score = (
-            (aproveitamento_volume * 0.4) +
-            (aproveitamento_peso * 0.3) +
-            (balanceamento * 0.2) -
-            (ociosidade * 0.1)
+            (aproveitamento_volume * 0.45) +
+            (aproveitamento_peso * 0.35) +
+            (balanceamento * 0.2)
+            - penalidade_excesso
         )
-    
+        
         score = max(0, round(score, 2))
-    
-        resultados.append({
-            "Veículo": veic["Veículo"],
-            "Status": "Viável",
-            "Motivo": "",
-            "Aproveitamento Volume (%)": aproveitamento_volume,
-            "Aproveitamento Peso (%)": aproveitamento_peso,
-            "Score": score
-        })
-                continue
-    
-            # viável
-            aproveitamento_volume = round(
-                (volume_total_carga / volume_veiculo) * 100, 2
-            )
-    
-            aproveitamento_peso = round(
-                (peso_total / peso_max) * 100, 2
-            ) if peso_max > 0 else 0
-    
-            ociosidade = 100 - aproveitamento_volume
-            penalidade = ociosidade * 0.3
-            balanceamento = 100 - abs(aproveitamento_volume - aproveitamento_peso)
-    
-            score = (
-                (aproveitamento_volume * 0.4) +
-                (aproveitamento_peso * 0.3) +
-                (balanceamento * 0.2) -
-                (ociosidade * 0.1)
-            )
-    
-        score = max(0, round(score, 2))
-    
+        
         resultados.append({
             "Veículo": veic["Veículo"],
             "Status": "Viável",
@@ -846,15 +817,15 @@ if btn_calcular:
 
 df_base = st.session_state.df_result
 
-if not isinstance(df_base, pd.DataFrame) or df_base.empty:
+if df_base.empty:
     st.info("Clique em calcular para gerar o dimensionamento.")
-    st.stop()
+else:
 
-# modo multi-veículo
-if "Status" not in df_base.columns:
-    st.warning("⚠️ Resultado exibido no modo multi-veículo (sem ranking).")
-    st.dataframe(df_base, use_container_width=True)
-    st.stop()
+    # modo multi-veículo
+    if "Status" not in df_base.columns:
+        st.warning("⚠️ Resultado exibido no modo multi-veículo (sem ranking).")
+        st.dataframe(df_base, use_container_width=True)
+        st.stop()
 
 df_viaveis = df_base[df_base["Status"] == "Viável"].copy()
 
