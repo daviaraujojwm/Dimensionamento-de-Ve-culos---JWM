@@ -127,13 +127,13 @@ st.subheader("📦 Adicionar carga")
 col1, col2, col3, col4 = st.columns(4)
 
 with col1:
-    comp = st.number_input("Comprimento (m):", min_value=0.0, format="%.3f", key="comp")
+    comp = round(st.number_input("Comprimento (m):", min_value=0.0, step=0.01, format="%.2f", key="comp"), 2)
 with col2:
-    larg = st.number_input("Largura (m):", min_value=0.0, format="%.3f", key="larg")
+    larg = round(st.number_input("Largura (m):", min_value=0.0, step=0.01, format="%.2f", key="larg"), 2)
 with col3:
-    alt = st.number_input("Altura (m):", min_value=0.0, format="%.3f", key="alt")
+    alt = round(st.number_input("Altura (m):", min_value=0.0, step=0.01, format="%.2f", key="alt"), 2)
 with col4:
-    peso = st.number_input("Peso unitário (kg):", min_value=0.0, format="%.2f", key="peso")
+    peso = round(st.number_input("Peso unitário (kg):", min_value=0.0, step=0.01, format="%.2f", key="peso"), 2)
 
 qtd = st.number_input("Quantidade:", min_value=1, value=1, step=1, key="qtd")
 
@@ -467,7 +467,7 @@ def calcular_multi_veiculos(cargas, df_veiculos):
     # ordenar veículos do maior para o menor
     veiculos_ordenados = df_veiculos.sort_values(
         by="Capacidade Volume (m³)",
-        ascending=False
+        ascending=True
     )
 
     resultado = []
@@ -476,6 +476,10 @@ def calcular_multi_veiculos(cargas, df_veiculos):
     # 🔴 alerta de cargas impossíveis
     if any(c["peso"] > df_veiculos["peso_max"].max() for c in cargas_restantes):
         st.warning("⚠ Existem cargas com peso maior que qualquer veículo disponível.")
+
+while cargas_restantes:
+
+    alocou_algum = False
 
     for _, veic in veiculos_ordenados.iterrows():
 
@@ -491,37 +495,34 @@ def calcular_multi_veiculos(cargas, df_veiculos):
 
         alocadas = []
         peso_total = 0
-
-        novas_restantes = []
-        
         volume_ocupado = 0
-        
+        novas_restantes = []
+
         for carga in cargas_restantes:
-        
+
             volume_carga = carga["volume"]
-        
+
             if (
                 peso_total + carga["peso"] > peso_max or
                 volume_ocupado + volume_carga > (comp_v * larg_v * alt_v)
             ):
                 novas_restantes.append(carga)
                 continue
-        
+
             cabe = cabe_no_piso_heuristica(
                 alocadas + [carga],
                 comp_v,
                 larg_v,
                 alt_v
             )
-        
+
             if cabe:
                 alocadas.append(carga)
                 peso_total += carga["peso"]
-                volume_ocupado += volume_carga 
+                volume_ocupado += volume_carga
+                alocou_algum = True
             else:
                 novas_restantes.append(carga)
-        
-        cargas_restantes = novas_restantes
 
         if alocadas:
             resultado.append({
@@ -529,6 +530,11 @@ def calcular_multi_veiculos(cargas, df_veiculos):
                 "Qtd Caixas": len(alocadas),
                 "Peso Total (kg)": round(peso_total, 2)
             })
+
+        cargas_restantes = novas_restantes
+
+    if not alocou_algum:
+        break
 
     return resultado, len(cargas_restantes)
 def simular_cenario(cargas, veiculos_usados, df_veiculos):
@@ -589,14 +595,6 @@ def simular_cenario(cargas, veiculos_usados, df_veiculos):
         })
 
     return resultado, len(cargas_restantes)
-# ============================
-# 🧠 SELETOR DE MODO
-# ============================
-modo = st.radio(
-    "🧠 Tipo de cálculo:",
-    ["Melhor veículo", "Multi-veículo"],
-    horizontal=True
-)
 
 # ============================
 # 🚀 BOTÃO CALCULAR
@@ -625,71 +623,86 @@ if btn_calcular:
     # ============================
     # 🔥 MODO MULTI-VEÍCULO
     # ============================
-    if modo == "Multi-veículo":
     
         # ============================
         # 🧠 CENÁRIOS INTELIGENTES
         # ============================
     
-        if len(df_testar) > 10:
-            st.warning("Muitos veículos selecionados, limitando análise.")
+        # ============================
+        # 🟢 TESTE DE VEÍCULO ÚNICO
+        # ============================
+        resultados = []
         
-            df_testar = df_testar.sort_values(
-                by="Capacidade Volume (m³)",
-                ascending=False
-            ).head(10)
+        cargas_unitarias = expand_cargas_unitarias(st.session_state.cargas, limite=300)
         
-        cenarios = gerar_cenarios(df_testar, max_veiculos=3)
+        for _, veic in df_testar.iterrows():
         
-        melhor = None
-        melhor_cenario = None
-        menor_sobra = float("inf")
+            comp_v = veic["comprimento"]
+            larg_v = veic["largura"]
+            alt_v  = veic["altura"]
+            peso_max = veic["peso_max"]
         
-        for cenario in cenarios:
+            volume_veiculo = comp_v * larg_v * alt_v
         
-            resultado, sobra = simular_cenario(
+            status = "Viável"
+            motivo = ""
+        
+            if volume_total_carga > volume_veiculo:
+                status = "Inviável"
+                motivo = "Excede volume"
+        
+            elif peso_total > peso_max:
+                status = "Inviável"
+                motivo = "Excede peso"
+        
+            else:
+                cabe = cabe_no_piso_heuristica(
+                    cargas_unitarias,
+                    comp_v,
+                    larg_v,
+                    alt_v
+                )
+        
+                if not cabe:
+                    status = "Inviável"
+                    motivo = "Não cabe fisicamente"
+        
+            resultados.append({
+                "Veículo": veic["Veículo"],
+                "Status": status,
+                "Motivo": motivo
+            })
+        
+        df_result = pd.DataFrame(resultados)
+        
+        # ============================
+        # 🔴 DECISÃO AUTOMÁTICA
+        # ============================
+        if (df_result["Status"] == "Viável").any():
+        
+            st.session_state.df_result = df_result
+            st.success("✅ Veículo único encontrado!")
+        
+        else:
+        
+            st.warning("⚠ Nenhum veículo único comporta a carga. Calculando multi-veículo...")
+        
+            resultado, sobra = calcular_multi_veiculos(
                 st.session_state.cargas,
-                cenario,
                 df_testar
             )
         
-            if (
-                sobra < menor_sobra or
-                (sobra == menor_sobra and melhor is not None and len(resultado) < len(melhor))
-            ):
-                menor_sobra = sobra
-                melhor = resultado
-                melhor_cenario = cenario  # 🔥 novo
+            df_multi = pd.DataFrame(resultado)
         
-        # ✅ FORA DO LOOP
-        if melhor is None or len(melhor) == 0:
-            st.error("❌ Nenhum cenário viável encontrado.")
+            st.session_state.df_result = df_multi
+        
+            if sobra > 0:
+                st.warning(f"⚠ {sobra} caixas não foram alocadas.")
+        
+            st.success("🚚 Solução com múltiplos veículos encontrada!")
+            st.dataframe(df_multi, use_container_width=True)
+        
             st.stop()
-        
-        df_result = pd.DataFrame(melhor)
-        
-        # 🔥 PROTEÇÃO EXTRA
-        if df_result.empty:
-            st.error("❌ Erro ao gerar resultado.")
-            st.stop()
-        
-        # garante estrutura padrão
-        if "Status" not in df_result.columns:
-            df_result["Status"] = "Multi"
-        if "Score" not in df_result.columns:
-            df_result["Score"] = 0
-        if "Motivo" not in df_result.columns:
-            df_result["Motivo"] = ""
-        
-        if menor_sobra > 0:
-            st.warning(f"⚠️ {menor_sobra} caixas não foram alocadas.")
-        
-        st.session_state.df_result = df_result
-        
-        st.success("🚚 Melhor cenário encontrado!")
-        st.dataframe(df_result, use_container_width=True)
-        
-        st.stop()
 
     # ============================
     # 🟢 MODO MELHOR VEÍCULO
