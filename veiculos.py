@@ -758,6 +758,7 @@ if btn_calcular:
 # ============================
 
 df_base = st.session_state.df_result
+df_viaveis = pd.DataFrame()
 
 if df_base.empty:
     st.info("Clique em calcular para gerar o dimensionamento.")
