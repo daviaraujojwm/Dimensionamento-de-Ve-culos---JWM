@@ -13,16 +13,16 @@ st.set_page_config(page_title="Cubagem de Veículos - JWM", layout="wide")
 st.markdown(
     """
     <style>
-    /* Fundo do app */
+    /* Fundo do app com imagem RAW do GitHub */
     body {
-        background-image: url("https://SEU-LINK-AQUI/tela%20de%20fundo.jpg");
+        background-image: url("https://raw.githubusercontent.com/daviaraujojwm/Dimensionamento-de-Ve-culos---JWM/main/tela%20de%20fundo.png");
         background-size: cover;
         background-position: center;
         background-repeat: no-repeat;
         background-attachment: fixed;
     }
 
-    /* Remove fundo branco do Streamlit */
+    /* Remove fundo branco padrão do Streamlit */
     section[data-testid="stAppViewContainer"] {
         background: transparent !important;
     }
