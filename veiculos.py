@@ -8,14 +8,12 @@ MAX_CAIXAS_3D = 200
 MAX_ITERACOES = 5000
 MAX_GRID = 10000
 
-# ============================
-# FUNDO DO APP + SIDEBAR
-# ============================
+st.set_page_config(page_title="Cubagem de Veículos - JWM", layout="wide")
 
 st.markdown(
     """
     <style>
-    /* Fundo do navegador */
+    /* Fundo global do app */
     body {
         background-image: url("https://SEU-LINK-AQUI/tela%20de%20fundo.jpg");
         background-size: cover;
@@ -24,7 +22,7 @@ st.markdown(
         background-attachment: fixed;
     }
 
-    /* Remove o fundo branco do Streamlit */
+    /* Remove fundo branco padrão do Streamlit */
     section[data-testid="stAppViewContainer"] {
         background: transparent !important;
     }
