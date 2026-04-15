@@ -362,6 +362,47 @@ def expand_cargas_unitarias(cargas, limite=MAX_CAIXAS):
                 "volume": comp * larg * alt
             })
 
+    def escolher_complementares_ideais(
+    caixas_excedentes,
+    df_veiculos,
+    volume_unit,
+    peso_unit
+):
+    complementares = []
+    restante = caixas_excedentes
+
+    df_testar = df_veiculos.sort_values(
+        by="Capacidade Volume (m³)",
+        ascending=True
+    )
+
+    while restante > 0:
+        melhor = None
+        melhor_qtd = 0
+
+        for _, veic in df_testar.iterrows():
+            max_vol = int(veic["Capacidade Volume (m³)"] // volume_unit)
+            max_peso = int(veic["peso_max"] // peso_unit)
+
+            qtd_possivel = min(max_vol, max_peso, restante)
+
+            if qtd_possivel > melhor_qtd:
+                melhor_qtd = qtd_possivel
+                melhor = veic
+
+        if not melhor or melhor_qtd <= 0:
+            break
+
+        complementares.append({
+            "Veículo": melhor["Veículo"],
+            "Qtd Caixas": melhor_qtd,
+            "Peso Total (kg)": round(melhor_qtd * peso_unit, 2)
+        })
+
+        restante -= melhor_qtd
+
+    return complementares, restante
+    
     return lista
 def calcular_totais(cargas):
     """
@@ -905,16 +946,6 @@ O uso de múltiplos veículos pode não ser necessário.
 """
                 )
 
-    # ✅ veículos complementares
-    complementares = df_multi.iloc[1:]
-
-    if not complementares.empty:
-        st.subheader("➕ Veículos Complementares")
-        st.dataframe(
-            complementares[["Veículo", "Qtd Caixas", "Peso Total (kg)", "Papel"]],
-            use_container_width=True
-        )
-
     # ✅ tabela completa
     with st.expander("📋 Detalhe completo da alocação"):
         st.dataframe(df_multi, use_container_width=True)
@@ -933,16 +964,6 @@ para garantir viabilidade total da operação.
 
     st.stop()
 
-
-    # ✅ Veículos complementares
-    complementares = df_multi.iloc[1:]
-
-    if not complementares.empty:
-        st.subheader("➕ Veículos Complementares")
-        st.dataframe(
-            complementares[["Veículo", "Qtd Caixas", "Peso Total (kg)", "Papel"]],
-            use_container_width=True
-        )
 
     # ✅ tabela completa (opcional, mas útil)
     with st.expander("📋 Detalhe completo da alocação"):
