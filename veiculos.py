@@ -13,7 +13,11 @@ st.set_page_config(page_title="Cubagem de Veículos - JWM", layout="wide")
 st.markdown(
     """
     <style>
-    /* Fundo do app com imagem RAW do GitHub */
+    /* === FUNDO GLOBAL COM IMAGEM === */
+    html, body {
+        height: 100%;
+    }
+
     body {
         background-image: url("https://raw.githubusercontent.com/daviaraujojwm/Dimensionamento-de-Ve-culos---JWM/main/tela%20de%20fundo.png");
         background-size: cover;
@@ -22,18 +26,20 @@ st.markdown(
         background-attachment: fixed;
     }
 
-    /* Remove fundo branco padrão do Streamlit */
-    section[data-testid="stAppViewContainer"] {
-        background: transparent !important;
-    }
-
+    /* === ZERAR FUNDOS DO STREAMLIT (TEMA DARK) === */
+    .stApp,
+    section[data-testid="stAppViewContainer"],
+    section[data-testid="stSidebarContent"],
+    main,
+    .stMain,
+    .stMain > div,
     .block-container {
         background: transparent !important;
     }
 
-    /* Sidebar com efeito vidro */
+    /* === SIDEBAR VIDRO FOSCO === */
     [data-testid="stSidebar"] {
-        background: rgba(0, 0, 0, 0.45);
+        background: rgba(0, 0, 0, 0.45) !important;
         backdrop-filter: blur(8px);
         -webkit-backdrop-filter: blur(8px);
     }
