@@ -13,7 +13,7 @@ st.set_page_config(page_title="Cubagem de Veículos - JWM", layout="wide")
 st.markdown(
     """
     <style>
-    /* Fundo global do app */
+    /* Fundo do app */
     body {
         background-image: url("https://SEU-LINK-AQUI/tela%20de%20fundo.jpg");
         background-size: cover;
@@ -22,7 +22,7 @@ st.markdown(
         background-attachment: fixed;
     }
 
-    /* Remove fundo branco padrão do Streamlit */
+    /* Remove fundo branco do Streamlit */
     section[data-testid="stAppViewContainer"] {
         background: transparent !important;
     }
@@ -31,7 +31,7 @@ st.markdown(
         background: transparent !important;
     }
 
-    /* Sidebar com efeito vidro (opção 2) */
+    /* Sidebar com efeito vidro */
     [data-testid="stSidebar"] {
         background: rgba(0, 0, 0, 0.45);
         backdrop-filter: blur(8px);
