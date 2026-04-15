@@ -342,7 +342,7 @@ def expand_cargas_unitarias(cargas, limite=MAX_CAIXAS):
             qtd = int(c["Quantidade"])
             comp = float(c["Comprimento (m)"])
             larg = float(c["Largura (m)"])
-            alt  = float(c["Altura (m)"])
+            alt = float(c["Altura (m)"])
             peso = float(c["Peso unitário (kg)"])
         except:
             continue
@@ -362,48 +362,8 @@ def expand_cargas_unitarias(cargas, limite=MAX_CAIXAS):
                 "volume": comp * larg * alt
             })
 
-    def escolher_complementares_ideais(
-    caixas_excedentes,
-    df_veiculos,
-    volume_unit,
-    peso_unit
-):
-    complementares = []
-    restante = caixas_excedentes
-
-    df_testar = df_veiculos.sort_values(
-        by="Capacidade Volume (m³)",
-        ascending=True
-    )
-
-    while restante > 0:
-        melhor = None
-        melhor_qtd = 0
-
-        for _, veic in df_testar.iterrows():
-            max_vol = int(veic["Capacidade Volume (m³)"] // volume_unit)
-            max_peso = int(veic["peso_max"] // peso_unit)
-
-            qtd_possivel = min(max_vol, max_peso, restante)
-
-            if qtd_possivel > melhor_qtd:
-                melhor_qtd = qtd_possivel
-                melhor = veic
-
-        if not melhor or melhor_qtd <= 0:
-            break
-
-        complementares.append({
-            "Veículo": melhor["Veículo"],
-            "Qtd Caixas": melhor_qtd,
-            "Peso Total (kg)": round(melhor_qtd * peso_unit, 2)
-        })
-
-        restante -= melhor_qtd
-
-    return complementares, restante
-    
     return lista
+
 def calcular_totais(cargas):
     """
     Calcula volume e peso total de forma consistente.
@@ -423,6 +383,26 @@ def calcular_totais(cargas):
         peso += peso_unit * qtd
 
     return volume, peso
+
+def excede_capacidade(
+    peso_atual,
+    volume_atual,
+    peso_carga,
+    volume_carga,
+    peso_max,
+    volume_max
+):
+    """
+    Retorna True se a inclusão da carga exceder
+    peso ou volume do veículo.
+    """
+    if peso_atual + peso_carga > peso_max:
+        return True
+
+    if volume_atual + volume_carga > volume_max:
+        return True
+
+    return False
 
 def calcular_score(volume_usado, volume_max, peso_usado, peso_max):
     """
@@ -498,6 +478,7 @@ def cabe_no_piso_heuristica(items, comp_v, larg_v, alt_v):
     if not items:
         return True
 
+    # Ordena as caixas maiores primeiro
     items = sorted(
         items,
         key=lambda x: x["comp"] * x["larg"] * x["alt"],
@@ -511,15 +492,17 @@ def cabe_no_piso_heuristica(items, comp_v, larg_v, alt_v):
 
         colocado = False
 
+        # Testa duas orientações no piso (rotação)
         for comp_i, larg_i in (
             (it["comp"], it["larg"]),
             (it["larg"], it["comp"])
         ):
 
+            # Não cabe no piso
             if comp_i > comp_v or larg_i > larg_v:
                 continue
 
-            # tenta encaixar na camada atual
+            # Tenta encaixar na camada existente
             for camada in camadas:
                 if camada["len"] + comp_i <= comp_v:
                     camada["len"] += comp_i
@@ -529,17 +512,118 @@ def cabe_no_piso_heuristica(items, comp_v, larg_v, alt_v):
             if colocado:
                 break
 
-            # cria nova camada
+            # Cria nova camada (empilhamento)
             if altura_usada + it["alt"] <= alt_v:
                 camadas.append({"len": comp_i})
                 altura_usada += it["alt"]
                 colocado = True
                 break
 
+        # Não foi possível colocar a caixa
         if not colocado:
             return False
 
     return True
+
+def simular_empilhamento_3d(
+    cargas_unitarias,
+    veiculo,
+    qtd_total_real,
+    limite_iter=MAX_ITERACOES,
+    max_grid=MAX_GRID
+):
+    comp_veic = veiculo["comprimento"]
+    larg_veic = veiculo["largura"]
+    alt_veic = veiculo["altura"]
+    peso_max = veiculo["peso_max"]
+
+    posicoes_ocupadas = []
+    caixas_alocadas = 0
+    peso_acumulado = 0
+
+    contador = 0
+    estourou_limite = False
+
+    cargas_unitarias = sorted(
+        cargas_unitarias,
+        key=lambda x: x["comp"] * x["larg"] * x["alt"],
+        reverse=True
+    )
+
+    for item in cargas_unitarias:
+
+        if estourou_limite:
+            break
+
+        if item["peso"] <= 0:
+            continue
+
+        orientacoes = [
+            (item["comp"], item["larg"], item["alt"]),
+            (item["larg"], item["comp"], item["alt"])
+        ]
+
+        for comp_o, larg_o, alt_o in orientacoes:
+
+            try:
+                x_max = int(comp_veic // comp_o)
+                y_max = int(larg_veic // larg_o)
+                z_max = int(alt_veic // alt_o)
+            except:
+                continue
+
+            grid_size = x_max * y_max * z_max
+            if grid_size <= 0:
+                continue
+
+            if grid_size > max_grid:
+                fator = (grid_size / max_grid) ** (1/3)
+                x_max = max(1, int(x_max / fator))
+                y_max = max(1, int(y_max / fator))
+                z_max = max(1, int(z_max / fator))
+
+            step = max(1, min(x_max, y_max, z_max) // 10)
+
+            for x in range(0, x_max, step):
+                for y in range(0, y_max, step):
+                    for z in range(0, z_max, step):
+
+                        contador += 1
+                        if contador > limite_iter:
+                            estourou_limite = True
+                            break
+
+                        nova = (
+                            x * comp_o,
+                            y * larg_o,
+                            z * alt_o,
+                            comp_o,
+                            larg_o,
+                            alt_o
+                        )
+
+                        if colide(nova, posicoes_ocupadas):
+                            continue
+                        if not tem_base(nova, posicoes_ocupadas):
+                            continue
+                        if peso_acumulado + item["peso"] > peso_max:
+                            continue
+
+                        posicoes_ocupadas.append(nova)
+                        caixas_alocadas += 1
+                        peso_acumulado += item["peso"]
+
+                        if caixas_alocadas >= qtd_total_real:
+                            estourou_limite = True
+                            break
+                    if estourou_limite:
+                        break
+                if estourou_limite:
+                    break
+
+    volume_usado = sum(c * l * a for (_, _, _, c, l, a) in posicoes_ocupadas)
+
+    return posicoes_ocupadas, caixas_alocadas, volume_usado, peso_acumulado
 
 def calcular_multi_veiculos(cargas, df_veiculos):
 
@@ -589,9 +673,13 @@ def calcular_multi_veiculos(cargas, df_veiculos):
 
                 volume_carga = carga["volume"]
 
-                if (
-                    peso_total + carga["peso"] > peso_max or
-                    volume_ocupado + volume_carga > (comp_v * larg_v * alt_v)
+                if excede_capacidade(
+                    peso_total,
+                    volume_ocupado,
+                    carga["peso"],
+                    volume_carga,
+                    peso_max,
+                    comp_v * larg_v * alt_v
                 ):
                     novas_restantes.append(carga)
                     continue
@@ -637,7 +725,7 @@ def simular_cenario(cargas, veiculos_usados, df_veiculos):
             continue  # 🔥 evita crash
 
         veic = veic_match.iloc[0]
-
+        
         comp_v = veic["comprimento"]
         larg_v = veic["largura"]
         alt_v  = veic["altura"]
@@ -653,9 +741,13 @@ def simular_cenario(cargas, veiculos_usados, df_veiculos):
             volume_ocupado = sum(c["volume"] for c in alocadas)
             volume_carga = carga["volume"]
             
-            if (
-                peso_total + carga["peso"] > peso_max or
-                volume_ocupado + volume_carga > (comp_v * larg_v * alt_v)
+            if excede_capacidade(
+                peso_total,
+                volume_ocupado,
+                carga["peso"],
+                volume_carga,
+                peso_max,
+                comp_v * larg_v * alt_v
             ):
                 novas_restantes.append(carga)
                 continue
@@ -719,15 +811,16 @@ def executar_calculo(cargas, df_veiculos, selecionados):
         status = "Viável"
         motivo = ""
 
-        if volume_total > volume_veic:
+        if excede_capacidade(
+            peso_atual=0,
+            volume_atual=0,
+            peso_carga=peso_total,
+            volume_carga=volume_total,
+            peso_max=peso_max,
+            volume_max=volume_veic
+        ):
             status = "Inviável"
-            motivo = "Excede volume"
-        elif peso_total > peso_max:
-            status = "Inviável"
-            motivo = "Excede peso"
-        elif not cabe_no_piso_heuristica(cargas_unit, comp, larg, alt):
-            status = "Inviável"
-            motivo = "Não cabe fisicamente"
+            motivo = "Excede capacidade (peso ou volume)"
 
         resultados_viabilidade.append({
             "Veículo": veic["Veículo"],
@@ -964,25 +1057,6 @@ para garantir viabilidade total da operação.
 
     st.stop()
 
-
-    # ✅ tabela completa (opcional, mas útil)
-    with st.expander("📋 Detalhe completo da alocação"):
-        st.dataframe(df_multi, use_container_width=True)
-
-    st.info(
-        f"""
-🧠 **Decisão tomada automaticamente**
-
-O veículo **{principal['Veículo']}** foi definido como **principal**
-por transportar a maior parte da carga.
-
-A carga remanescente foi distribuída entre veículos complementares
-para garantir viabilidade total da operação.
-"""
-    )
-
-    st.stop()
-
 # ============================
 # 🟢 MODO VEÍCULO ÚNICO (RANKING)
 # ============================
@@ -1079,37 +1153,38 @@ def tem_base(nova, ocupadas):
 
     return False
 
-
 # ============================
-# 🔍 SIMULAÇÃO REAL DE EMPILHAMENTO (AJUSTADA)
+# 🔍 SIMULAÇÃO REAL DE EMPILHAMENTO (FINAL)
 # ============================
 
 if st.button("🔍 Simular Empilhamento"):
 
+    # 🔒 validações iniciais
     if st.session_state.df_result.empty:
         st.error("⚠ Execute o cálculo primeiro.")
-    else:
+        st.stop()
 
-        if not st.session_state.cargas:
-            st.error("⚠ Nenhuma carga disponível.")
-            st.stop()
+    if not st.session_state.cargas:
+        st.error("⚠ Nenhuma carga disponível.")
+        st.stop()
 
+    # quantidade total real de caixas
     qtd_total_real = sum(c["Quantidade"] for c in st.session_state.cargas)
-    volume_total_carga, peso_total = calcular_totais(st.session_state.cargas)
 
-    # expandir cargas
-    cargas_unitarias = expand_cargas_unitarias(st.session_state.cargas, limite=300)
-    
-    # 🔥 PROTEÇÃO DE PERFORMANCE
-    
+    # expandir cargas unitárias
+    cargas_unitarias = expand_cargas_unitarias(
+        st.session_state.cargas,
+        limite=MAX_CAIXAS_3D
+    )
+
     if len(cargas_unitarias) > MAX_CAIXAS_3D:
         st.warning(
             f"⚠ Simulação limitada a {MAX_CAIXAS_3D} caixas "
             f"(total real: {len(cargas_unitarias)})"
         )
         cargas_unitarias = cargas_unitarias[:MAX_CAIXAS_3D]
-    
-    # ✅ AGORA SIM DENTRO DO BOTÃO
+
+    # obter veículos viáveis
     if "Status" in st.session_state.df_result.columns:
         df_viaveis = st.session_state.df_result[
             st.session_state.df_result["Status"] == "Viável"
@@ -1117,198 +1192,65 @@ if st.button("🔍 Simular Empilhamento"):
     else:
         st.warning("Modo multi-veículo não suporta simulação de empilhamento.")
         st.stop()
-    
-    # fora do else
-    if df_viaveis is None or df_viaveis.empty:
+
+    if df_viaveis.empty:
         st.error("❌ Nenhum veículo viável encontrado.")
         st.stop()
 
-    df_viaveis = (
+    # melhor veículo pelo score
+    melhor_veiculo = (
         df_viaveis
-        .dropna(subset=["Score"])
         .sort_values(by="Score", ascending=False)
-        .reset_index(drop=True)
+        .iloc[0]["Veículo"]
     )
-    
-    if df_viaveis.empty:
-        st.error("❌ Nenhum veículo válido com score.")
-        st.stop()
-    melhor_veiculo = df_viaveis.iloc[0]["Veículo"]
-    
-    veic_match = df_veiculos[df_veiculos["Veículo"] == melhor_veiculo]
 
+    veic_match = df_veiculos[df_veiculos["Veículo"] == melhor_veiculo]
     if veic_match.empty:
         st.error(f"Veículo {melhor_veiculo} não encontrado na base.")
         st.stop()
-    
+
     veic = veic_match.iloc[0]
 
-    comp_veic = veic["comprimento"]
-    larg_veic = veic["largura"]
-    alt_veic = veic["altura"]
-    volume_veiculo = comp_veic * larg_veic * alt_veic
-
-    if comp_veic <= 0 or larg_veic <= 0 or alt_veic <= 0:
-        st.error("Dimensões do veículo inválidas.")
-        st.stop()
-
-    cargas_unitarias = sorted(
-        cargas_unitarias,
-        key=lambda x: (x["comp"] * x["larg"] * x["alt"]),
-        reverse=True
+    # ✅ CHAMADA CORRETA DA FUNÇÃO 3D
+    posicoes_ocupadas, caixas_alocadas, volume_usado, peso_acumulado = (
+        simular_empilhamento_3d(
+            cargas_unitarias,
+            veic,
+            qtd_total_real
+        )
     )
 
-    posicoes_ocupadas = []
-    caixas_alocadas = 0
-    peso_acumulado = 0
+    # métricas do veículo
     peso_max = veic["peso_max"]
-
-    limite_iter = MAX_ITERACOES
-    contador = 0
-    estourou_limite = False
-    for item in cargas_unitarias:
-    
-        if estourou_limite:
-            break
-    
-        # 🔥 VALIDAÇÃO EXTRA DE SEGURANÇA
-        if item["peso"] <= 0:
-            continue
-    
-        encaixou = False
-    
-        orientacoes = [
-            (item["comp"], item["larg"], item["alt"]),
-            (item["larg"], item["comp"], item["alt"])
-        ]
-    
-        for comp_o, larg_o, alt_o in orientacoes:
-        
-            # 🔒 validação mais rígida
-            if min(comp_o, larg_o, alt_o) <= 0:
-                continue
-        
-            # 🔥 evita divisões inválidas
-            try:
-                x_max = int(comp_veic // comp_o) if comp_o > 0 else 0
-                y_max = int(larg_veic // larg_o) if larg_o > 0 else 0
-                z_max = int(alt_veic // alt_o) if alt_o > 0 else 0
-        
-                if x_max <= 0 or y_max <= 0 or z_max <= 0:
-                    continue
-            except:
-                continue
-        
-            # 🔥 controle inteligente de grid
-            grid_size = x_max * y_max * z_max
-            
-            if grid_size > MAX_GRID:
-                fator = (grid_size / MAX_GRID) ** (1/3)
-            
-                x_max = max(1, int(x_max / fator))
-                y_max = max(1, int(y_max / fator))
-                z_max = max(1, int(z_max / fator))
-            
-                # 🔥 recalcular grid
-                grid_size = x_max * y_max * z_max
-        
-            # 🔴 PROTEÇÃO FINAL (NOVO)
-            if grid_size > MAX_GRID:
-                continue
-        
-            if grid_size <= 0:
-                continue
-            
-            STEP = max(1, min(x_max, y_max, z_max) // 10)
-            
-            for x in range(0, x_max, STEP):
-                if estourou_limite:
-                    break
-            
-                for y in range(0, y_max, STEP):
-                    if estourou_limite:
-                        break
-            
-                    for z in range(0, z_max, STEP):
-        
-                        contador += 1
-        
-                        if contador > limite_iter:
-                            st.warning("Limite de simulação atingido.")
-                            estourou_limite = True
-                            break
-            
-                        nova_caixa = (
-                            x * comp_o,
-                            y * larg_o,
-                            z * alt_o,
-                            comp_o,
-                            larg_o,
-                            alt_o
-                        )
-            
-                        if colide(nova_caixa, posicoes_ocupadas):
-                            continue
-            
-                        if not tem_base(nova_caixa, posicoes_ocupadas):
-                            continue
-                                    
-                        # valida peso antes de alocar
-                        if peso_acumulado + item["peso"] > peso_max:
-                            continue
-                        
-                        posicoes_ocupadas.append(nova_caixa)
-                        caixas_alocadas += 1
-                        peso_acumulado += item["peso"]
-                                    
-                        if caixas_alocadas >= qtd_total_real:
-                            encaixou = True
-                            estourou_limite = True
-                            break
-            
-                    if encaixou or estourou_limite:
-                        break
-                if encaixou or estourou_limite:
-                    break
-
-    volume_usado = sum(
-        c * l * a
-        for (_, _, _, c, l, a) in posicoes_ocupadas
+    volume_veiculo = (
+        veic["comprimento"] *
+        veic["largura"] *
+        veic["altura"]
     )
 
     ocupacao = round(
-        min(100, max(0, (volume_usado / volume_veiculo) * 100)),
+        min(100, (volume_usado / volume_veiculo) * 100),
         2
     )
-
-    # 🔥 usar MESMA lógica do score do ranking
-    aproveitamento_volume = ocupacao
-    aproveitamento_peso = (
-        (peso_acumulado / veic["peso_max"]) * 100
-        if veic["peso_max"] > 0 else 0
-    )
-
-    balanceamento = 100 - abs(aproveitamento_volume - aproveitamento_peso)
-    ociosidade = 100 - aproveitamento_volume
-    penalidade = ociosidade * 0.3
 
     eficiencia = calcular_score(
         volume_usado,
         volume_veiculo,
         peso_acumulado,
-        veic["peso_max"]
+        peso_max
     )
 
-    eficiencia = round(max(0, min(100, eficiencia)), 2)
-    
-    st.write("### 📊 Resultado da Simulação")
+    # ============================
+    # 📊 RESULTADOS
+    # ============================
+    st.subheader("📊 Resultado da Simulação")
     st.write(f"Veículo: {melhor_veiculo}")
     st.write(f"Volume utilizado: {volume_usado:.2f} m³")
     st.write(f"Ocupação: {ocupacao:.2f}%")
     st.write(f"Caixas alocadas: {caixas_alocadas}")
-    st.write(f"Eficiência: {eficiencia:.1f}%")
     st.write(f"Peso total carregado: {peso_acumulado:.2f} kg")
     st.write(f"Capacidade máxima do veículo: {peso_max:.2f} kg")
+    st.write(f"Eficiência: {eficiencia:.1f}%")
 
     if caixas_alocadas < qtd_total_real:
         st.error("⚠️ Nem todas as caixas couberam.")
@@ -1316,37 +1258,28 @@ if st.button("🔍 Simular Empilhamento"):
         st.success("✅ Todas as caixas foram alocadas.")
 
     # ============================
-    # VISUALIZAÇÃO 3D
+    # 📦 VISUALIZAÇÃO 3D
     # ============================
     fig = go.Figure()
-
     cores = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728"]
 
     for i, item in enumerate(posicoes_ocupadas):
-    
-        if not isinstance(item, tuple) or len(item) != 6:
-            continue
-    
-        try:
-            x0, y0, z0, c, l, a = item
-        except Exception as e:
-            st.warning(f"Erro no item 3D: {e}")
-            continue
-    
+        x0, y0, z0, c, l, a = item
+
         fig.add_trace(go.Mesh3d(
             x=[x0, x0+c, x0+c, x0, x0, x0+c, x0+c, x0],
             y=[y0, y0, y0+l, y0+l, y0, y0, y0+l, y0+l],
             z=[z0, z0, z0, z0, z0+a, z0+a, z0+a, z0+a],
-            opacity=0.9,
             color=cores[i % len(cores)],
+            opacity=0.9,
             showscale=False
         ))
 
     # caixa do veículo
     fig.add_trace(go.Mesh3d(
-        x=[0, comp_veic, comp_veic, 0, 0, comp_veic, comp_veic, 0],
-        y=[0, 0, larg_veic, larg_veic, 0, 0, larg_veic, larg_veic],
-        z=[0, 0, 0, 0, alt_veic, alt_veic, alt_veic, alt_veic],
+        x=[0, veic["comprimento"], veic["comprimento"], 0, 0, veic["comprimento"], veic["comprimento"], 0],
+        y=[0, 0, veic["largura"], veic["largura"], 0, 0, veic["largura"], veic["largura"]],
+        z=[0, 0, 0, 0, veic["altura"], veic["altura"], veic["altura"], veic["altura"]],
         opacity=0.05,
         color="gray",
         showscale=False
