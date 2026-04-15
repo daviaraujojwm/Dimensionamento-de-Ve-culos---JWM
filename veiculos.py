@@ -9,20 +9,13 @@ MAX_ITERACOES = 5000
 MAX_GRID = 10000
 
 # ============================
-# CONFIGURAÇÃO INICIAL
+# FUNDO DO APP + SIDEBAR
 # ============================
-
-st.set_page_config(page_title="Cubagem de Veículos - JWM", layout="wide")
 
 st.markdown(
     """
     <style>
-    /* Remove fundo padrão */
-    html, body, [class*="stApp"] {
-        background: none !important;
-    }
-
-    /* Fundo real do app */
+    /* Fundo do navegador */
     body {
         background-image: url("https://SEU-LINK-AQUI/tela%20de%20fundo.jpg");
         background-size: cover;
@@ -31,9 +24,20 @@ st.markdown(
         background-attachment: fixed;
     }
 
-    /* Área principal transparente */
+    /* Remove o fundo branco do Streamlit */
+    section[data-testid="stAppViewContainer"] {
+        background: transparent !important;
+    }
+
     .block-container {
         background: transparent !important;
+    }
+
+    /* Sidebar com efeito vidro (opção 2) */
+    [data-testid="stSidebar"] {
+        background: rgba(0, 0, 0, 0.45);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
     }
     </style>
     """,
