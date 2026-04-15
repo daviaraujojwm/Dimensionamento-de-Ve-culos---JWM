@@ -11,7 +11,37 @@ MAX_GRID = 10000
 # ============================
 # CONFIGURAÇÃO INICIAL
 # ============================
-st.set_page_config(page_title="Cubagem de Veículos - JWM", layout="wide")
+
+# Fundo do app (imagem hospedada)
+st.markdown(
+    """
+    <style>
+    .stApp {
+        background-image: url("https://raw.githubusercontent.com/SEU-USUARIO/SEU-REPO/main/tela%20de%20fundo.jpg");
+        background-size: cover;
+        background-position: center;
+        background-repeat: no-repeat;
+        background-attachment: fixed;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
+# Sidebar com transparência + blur (efeito vidro)
+st.markdown(
+    """
+    <style>
+    [data-testid="stSidebar"] {
+        background: rgba(0, 0, 0, 0.45);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
 
 # ============================
 # SESSION STATE INIT
