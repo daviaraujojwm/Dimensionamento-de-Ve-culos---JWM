@@ -1143,10 +1143,18 @@ if "Status" not in df_base.columns:
     # ✅ quantidade REAL de caixas da carga
     qtd_total_real = sum(c["Quantidade"] for c in st.session_state.cargas)
     
+    # caixas do veículo principal
     caixas_principal = principal["Qtd Caixas"]
     
-    # ✅ caixas restantes REAIS
-    caixas_restantes = qtd_total_real - caixas_principal
+    # caixas realmente alocadas nos complementares
+    caixas_complementares = (
+        df_multi[df_multi["Papel"] == "Complementar"]["Qtd Caixas"]
+        .astype(int)
+        .sum()
+    )
+    
+    caixas_restantes = caixas_complementares
+
     
     st.metric(
         "📦 Caixas remanescentes (necessitaram complemento)",
