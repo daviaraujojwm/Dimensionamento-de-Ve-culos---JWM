@@ -867,32 +867,64 @@ def executar_calculo(cargas, df_veiculos, selecionados):
 
     df_status = pd.DataFrame(resultados_viabilidade)
 
-    if (df_status["Status"] == "Viável").any():
-        # ranking
-        resultados = []
-
-        for _, row in df_status[df_status["Status"] == "Viável"].iterrows():
-            score = calcular_score(
-                volume_total,
-                row["Volume Veículo"],
-                peso_total,
-                row["Peso Máx"]
-            )
-
-            resultados.append({
-                "Veículo": row["Veículo"],
-                "Status": "Viável",
-                "Motivo": "",
-                "Aproveitamento Volume (%)": round(volume_total / row["Volume Veículo"] * 100, 2),
-                "Aproveitamento Peso (%)": round(peso_total / row["Peso Máx"] * 100, 2),
-                "Score": score
-            })
-
-        return pd.DataFrame(resultados), False
-
-    # fallback multi-veículo
+    # ======================================================
+    # NOVA DECISÃO BASEADA EM EMPILHAMENTO REAL
+    # ======================================================
+    
+    df_viaveis = df_status[df_status["Status"] == "Viável"]
+    
+    # nenhum veículo viável → multi-veículo direto
+    if df_viaveis.empty:
+        resultado_multi, _ = calcular_multi_veiculos(cargas, df_testar)
+        return pd.DataFrame(resultado_multi), True
+    
+    # ranking dos viáveis
+    resultados = []
+    
+    for _, row in df_viaveis.iterrows():
+        score = calcular_score(
+            volume_total,
+            row["Volume Veículo"],
+            peso_total,
+            row["Peso Máx"]
+        )
+    
+        resultados.append({
+            "Veículo": row["Veículo"],
+            "Status": "Viável",
+            "Motivo": "",
+            "Aproveitamento Volume (%)": round(volume_total / row["Volume Veículo"] * 100, 2),
+            "Aproveitamento Peso (%)": round(peso_total / row["Peso Máx"] * 100, 2),
+            "Score": score
+        })
+    
+    df_rank = (
+        pd.DataFrame(resultados)
+        .sort_values(by="Score", ascending=False)
+        .reset_index(drop=True)
+    )
+    
+    # -------- SIMULA EMPILHAMENTO NO MELHOR VEÍCULO --------
+    
+    melhor_veiculo = df_rank.iloc[0]["Veículo"]
+    veic = df_veiculos[df_veiculos["Veículo"] == melhor_veiculo].iloc[0]
+    
+    qtd_total_real = sum(c["Quantidade"] for c in cargas)
+    
+    _, caixas_alocadas, _, _ = simular_empilhamento_3d(
+        cargas_unit,
+        veic,
+        qtd_total_real
+    )
+    
+    # -------- DECISÃO FINAL --------
+    
+    if caixas_alocadas >= qtd_total_real:
+        return df_rank, False
+    
     resultado_multi, _ = calcular_multi_veiculos(cargas, df_testar)
     return pd.DataFrame(resultado_multi), True
+
 
 # ============================
 # 🚀 BOTÃO CALCULAR
