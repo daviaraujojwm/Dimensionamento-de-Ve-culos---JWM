@@ -1011,13 +1011,6 @@ def executar_calculo(cargas, df_veiculos, selecionados):
     df_final["Modo Operacao"] = "Multi"
     
     return df_final, True
-    
-    df_final = pd.DataFrame(melhores_veiculos)
-    df_final["Modo Operacao"] = "Multi"
-    
-    return df_final, True
-
-
 
 # ============================
 # 🚀 BOTÃO CALCULAR
@@ -1085,19 +1078,22 @@ if "Status" not in df_base.columns:
     st.metric("Caixas transportadas", principal["Qtd Caixas"])
     st.metric("Peso total (kg)", principal["Peso Total (kg)"])
 
-    # ✅ PASSO 2 — carga remanescente
-    total_caixas = df_multi["Qtd Caixas"].sum()
+    # ✅ quantidade REAL de caixas da carga
+    qtd_total_real = sum(c["Quantidade"] for c in st.session_state.cargas)
+    
     caixas_principal = principal["Qtd Caixas"]
-    caixas_restantes = total_caixas - caixas_principal
-
+    
+    # ✅ caixas restantes REAIS
+    caixas_restantes = qtd_total_real - caixas_principal
+    
     st.metric(
         "📦 Caixas remanescentes (necessitaram complemento)",
         caixas_restantes
     )
-
-    # ✅ PASSO 3 — percentual resolvido
-    percentual_resolvido = (caixas_principal / total_caixas) * 100
-
+    
+    # ✅ percentual CORRETO (baseado na carga real)
+    percentual_resolvido = (caixas_principal / qtd_total_real) * 100
+    
     st.metric(
         "✅ Percentual da carga resolvida pelo veículo principal",
         f"{percentual_resolvido:.1f}%"
