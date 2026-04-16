@@ -1008,21 +1008,22 @@ def executar_calculo(cargas, df_veiculos, selecionados):
     
     resultado_multi, caixas_restantes = calcular_multi_veiculos(cargas, df_testar)
     
-    # 🔒 BLOQUEIO: só aceita cenário se fechar 100% da carga
+    # ✅ 1) NÃO FECHA 100% → APENAS PARCIAIS
     if caixas_restantes > 0:
-        # não fechou toda a carga → cenário inválido
-        return pd.DataFrame(), True
+        df_parcial = pd.DataFrame(resultado_multi)
+        df_parcial["Modo Operacao"] = "Parcial (Sugestão)"
+        df_parcial["Aviso"] = "Não fecha 100% da carga"
+        return df_parcial, True
     
+    # ✅ 2) FECHA 100% → AVALIA QUALIDADE DO MULTI
     melhores_veiculos = escolher_melhores_veiculos(resultado_multi)
     df_final = pd.DataFrame(melhores_veiculos)
     
-    # 🔒 REGRA FINAL COM FALLBACK
     qtd_total_real = sum(c["Quantidade"] for c in cargas)
     caixas_principal = df_final.iloc[0]["Qtd Caixas"]
     percentual_principal = caixas_principal / qtd_total_real
     
     if percentual_principal < 0.6:
-        # cenário existe, mas NÃO é ideal
         df_final["Modo Operacao"] = "Multi (Alternativo)"
         df_final["Aviso"] = (
             "Nenhum cenário ideal encontrado. "
@@ -1030,10 +1031,9 @@ def executar_calculo(cargas, df_veiculos, selecionados):
         )
         return df_final, True
     
-    # cenário bom
+    # ✅ 3) MULTI BOM
     df_final["Modo Operacao"] = "Multi"
     return df_final, True
-
 
 # ============================
 # 🚀 BOTÃO CALCULAR
