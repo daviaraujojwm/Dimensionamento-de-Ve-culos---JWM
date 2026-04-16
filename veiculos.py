@@ -677,6 +677,28 @@ def simular_empilhamento_3d(
 
     return posicoes_ocupadas, caixas_alocadas, volume_usado, peso_acumulado
 
+# ==========================================
+# ✅ FUNÇÃO PARA COMPLEMENTO RESIDUAL
+# ==========================================
+def escolher_veiculo_menor_viavel(cargas_restantes, df_veiculos):
+    volume_restante = sum(c["volume"] for c in cargas_restantes)
+    peso_restante = sum(c["peso"] for c in cargas_restantes)
+
+    veiculos_ordenados = df_veiculos.sort_values(
+        by="Capacidade Volume (m³)",
+        ascending=True
+    )
+
+    for _, veic in veiculos_ordenados.iterrows():
+        volume_max = veic["comprimento"] * veic["largura"] * veic["altura"]
+        peso_max = veic["peso_max"]
+
+        if volume_restante <= volume_max and peso_restante <= peso_max:
+            return veic
+
+    return None
+
+
 def calcular_multi_veiculos(cargas, df_veiculos):
 
     cargas_unit = expand_cargas_unitarias(cargas, limite=MAX_CAIXAS)
@@ -701,30 +723,52 @@ def calcular_multi_veiculos(cargas, df_veiculos):
     if any(c["peso"] > df_veiculos["peso_max"].max() for c in cargas_restantes):
         st.warning("⚠ Existem cargas com peso maior que qualquer veículo disponível.")
 
-    # ✅ TUDO DENTRO DA FUNÇÃO
+    # ==============================
+    # MULTI‑VEÍCULO (ATUALIZADO)
+    # ==============================
+    TOTAL_CAIXAS = len(cargas_unit)
+    
     while cargas_restantes:
-
+    
+        # ✅ COMPLEMENTO RESIDUAL (CORREÇÃO)
+        if len(cargas_restantes) <= max(1, int(0.1 * TOTAL_CAIXAS)):
+            veic_menor = escolher_veiculo_menor_viavel(
+                cargas_restantes,
+                df_veiculos
+            )
+    
+            if veic_menor is not None:
+                resultado.append({
+                    "Veículo": veic_menor["Veículo"],
+                    "Qtd Caixas": len(cargas_restantes),
+                    "Peso Total (kg)": round(
+                        sum(c["peso"] for c in cargas_restantes), 2
+                    )
+                })
+                cargas_restantes = []
+                break
+    
         alocou_algum = False
-
+    
         for _, veic in veiculos_ordenados.iterrows():
-
+    
             if not cargas_restantes:
                 break
-
+    
             comp_v = veic["comprimento"]
             larg_v = veic["largura"]
             alt_v = veic["altura"]
             peso_max = veic["peso_max"]
-
+    
             alocadas = []
             peso_total = 0
             volume_ocupado = 0
             novas_restantes = []
-
+    
             for carga in cargas_restantes:
-
+    
                 volume_carga = carga["volume"]
-
+    
                 if excede_capacidade(
                     peso_total,
                     volume_ocupado,
@@ -735,14 +779,14 @@ def calcular_multi_veiculos(cargas, df_veiculos):
                 ):
                     novas_restantes.append(carga)
                     continue
-
+    
                 cabe = cabe_no_piso_heuristica(
                     alocadas + [carga],
                     comp_v,
                     larg_v,
                     alt_v
                 )
-
+    
                 if cabe:
                     alocadas.append(carga)
                     peso_total += carga["peso"]
@@ -750,18 +794,19 @@ def calcular_multi_veiculos(cargas, df_veiculos):
                     alocou_algum = True
                 else:
                     novas_restantes.append(carga)
-
+    
             if alocadas:
                 resultado.append({
                     "Veículo": veic["Veículo"],
                     "Qtd Caixas": len(alocadas),
                     "Peso Total (kg)": round(peso_total, 2)
                 })
-
+    
             cargas_restantes = novas_restantes
-
+    
         if not alocou_algum:
             break
+
 
     return resultado, len(cargas_restantes)
 def simular_cenario(cargas, veiculos_usados, df_veiculos):
