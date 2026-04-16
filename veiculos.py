@@ -688,10 +688,10 @@ def calcular_multi_veiculos(cargas, df_veiculos):
         reverse=True
     )
 
-    # ordenar veículos
+    # ordenar veículos (AJUSTADO – maior para menor ✅)
     veiculos_ordenados = df_veiculos.sort_values(
         by="Capacidade Volume (m³)",
-        ascending=True
+        ascending=False
     )
 
     resultado = []
