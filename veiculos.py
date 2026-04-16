@@ -1026,38 +1026,53 @@ def executar_calculo(cargas, df_veiculos, selecionados):
         return df_parcial, True
     
     # ======================================================
-    # 2) FECHA 100% → MOSTRAR TODO O CENÁRIO
+    # 2) FECHA 100% → OTIMIZAR E SELECIONAR MELHOR CENÁRIO
     # ======================================================
-    df_final = pd.DataFrame(resultado_multi)
-    
-    # ordenar por quem carrega mais
-    df_final = df_final.sort_values(
+    # ordena resultado bruto
+    df_base = pd.DataFrame(resultado_multi).sort_values(
         by="Qtd Caixas", ascending=False
     ).reset_index(drop=True)
     
-    # definir papel
+    qtd_total_real = sum(c["Quantidade"] for c in cargas)
+    df_base["Percentual"] = df_base["Qtd Caixas"] / qtd_total_real
+    
+    # candidatos iniciais (ex.: >= 15%)
+    LIMIAR_MINIMO = 0.15
+    candidatos = df_base[df_base["Percentual"] >= LIMIAR_MINIMO]["Veículo"].tolist()
+    
+    # 🔁 REOTIMIZA: roda o multi novamente só com os candidatos
+    df_veic_candidatos = df_testar[df_testar["Veículo"].isin(candidatos)]
+    resultado_opt, restantes_opt = calcular_multi_veiculos(cargas, df_veic_candidatos)
+    
+    # se a reotimização piorar (não fecha), mantém o original filtrado
+    if restantes_opt > 0:
+        df_final = df_base[df_base["Veículo"].isin(candidatos)].copy()
+    else:
+        df_final = pd.DataFrame(resultado_opt)
+    
+    # ordena final
+    df_final = df_final.sort_values(by="Qtd Caixas", ascending=False).reset_index(drop=True)
+    
+    # define papel
     df_final["Papel"] = "Complementar"
     df_final.loc[0, "Papel"] = "Principal"
     
-    # ======================================================
-    # 3) AVALIAR QUALIDADE DO CENÁRIO
-    # ======================================================
-    qtd_total_real = sum(c["Quantidade"] for c in cargas)
+    # avalia qualidade final
     caixas_principal = df_final.loc[0, "Qtd Caixas"]
     percentual_principal = caixas_principal / qtd_total_real
     
     if percentual_principal < 0.6:
         df_final["Modo Operacao"] = "Multi (Alternativo)"
         df_final["Aviso"] = (
-            "Nenhum cenário ideal encontrado. "
-            "Este é o melhor arranjo possível, porém com alta dependência de complemento."
+            "O veículo principal resolve apenas "
+            f"{percentual_principal*100:.1f}% da carga. "
+            "Pode valer a pena avaliar outro arranjo logístico."
         )
     else:
         df_final["Modo Operacao"] = "Multi"
         df_final["Aviso"] = ""
     
     return df_final, True
-
 
 # ============================
 # 🚀 BOTÃO CALCULAR
