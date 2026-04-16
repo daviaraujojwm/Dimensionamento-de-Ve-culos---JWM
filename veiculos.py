@@ -948,10 +948,18 @@ def executar_calculo(cargas, df_veiculos, selecionados):
     
     df_viaveis = df_status[df_status["Status"] == "Viável"]
     
-    # nenhum veículo viável → multi-veículo direto
     if df_viaveis.empty:
-        resultado_multi, _ = calcular_multi_veiculos(cargas, df_testar)
-        return pd.DataFrame(resultado_multi), True
+        resultado_multi, caixas_restantes = calcular_multi_veiculos(cargas, df_testar)
+    
+        # 🔒 BLOQUEIO OBRIGATÓRIO
+        if caixas_restantes > 0:
+            return pd.DataFrame(), True
+    
+        df_final = pd.DataFrame(
+            escolher_melhores_veiculos(resultado_multi)
+        )
+        df_final["Modo Operacao"] = "Multi"
+        return df_final, True
     
     # ranking dos viáveis
     resultados = []
