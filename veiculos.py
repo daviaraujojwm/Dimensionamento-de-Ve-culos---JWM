@@ -1014,10 +1014,18 @@ def executar_calculo(cargas, df_veiculos, selecionados):
         return pd.DataFrame(), True
     
     melhores_veiculos = escolher_melhores_veiculos(resultado_multi)
-    
     df_final = pd.DataFrame(melhores_veiculos)
-    df_final["Modo Operacao"] = "Multi"
     
+    # 🔒 NOVA REGRA FINAL
+    qtd_total_real = sum(c["Quantidade"] for c in cargas)
+    caixas_principal = df_final.iloc[0]["Qtd Caixas"]
+    percentual_principal = caixas_principal / qtd_total_real
+    
+    # Exemplo: exige pelo menos 60%
+    if percentual_principal < 0.6:
+        return pd.DataFrame(), True
+    
+    df_final["Modo Operacao"] = "Multi"
     return df_final, True
 
 # ============================
