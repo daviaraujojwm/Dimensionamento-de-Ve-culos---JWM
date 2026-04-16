@@ -1008,19 +1008,42 @@ def executar_calculo(cargas, df_veiculos, selecionados):
     
     resultado_multi, caixas_restantes = calcular_multi_veiculos(cargas, df_testar)
     
-    # ✅ 1) NÃO FECHA 100% → APENAS PARCIAIS
+    # ======================================================
+    # 1) SE NÃO FECHA 100% → PARCIAL (SUGESTÃO)
+    # ======================================================
     if caixas_restantes > 0:
         df_parcial = pd.DataFrame(resultado_multi)
+        df_parcial = df_parcial.sort_values(
+            by="Qtd Caixas", ascending=False
+        ).reset_index(drop=True)
+    
+        df_parcial["Papel"] = "Complementar"
+        if not df_parcial.empty:
+            df_parcial.loc[0, "Papel"] = "Principal"
+    
         df_parcial["Modo Operacao"] = "Parcial (Sugestão)"
         df_parcial["Aviso"] = "Não fecha 100% da carga"
         return df_parcial, True
     
-    # ✅ 2) FECHA 100% → AVALIA QUALIDADE DO MULTI
-    melhores_veiculos = escolher_melhores_veiculos(resultado_multi)
-    df_final = pd.DataFrame(melhores_veiculos)
+    # ======================================================
+    # 2) FECHA 100% → MOSTRAR TODO O CENÁRIO
+    # ======================================================
+    df_final = pd.DataFrame(resultado_multi)
     
+    # ordenar por quem carrega mais
+    df_final = df_final.sort_values(
+        by="Qtd Caixas", ascending=False
+    ).reset_index(drop=True)
+    
+    # definir papel
+    df_final["Papel"] = "Complementar"
+    df_final.loc[0, "Papel"] = "Principal"
+    
+    # ======================================================
+    # 3) AVALIAR QUALIDADE DO CENÁRIO
+    # ======================================================
     qtd_total_real = sum(c["Quantidade"] for c in cargas)
-    caixas_principal = df_final.iloc[0]["Qtd Caixas"]
+    caixas_principal = df_final.loc[0, "Qtd Caixas"]
     percentual_principal = caixas_principal / qtd_total_real
     
     if percentual_principal < 0.6:
@@ -1029,11 +1052,12 @@ def executar_calculo(cargas, df_veiculos, selecionados):
             "Nenhum cenário ideal encontrado. "
             "Este é o melhor arranjo possível, porém com alta dependência de complemento."
         )
-        return df_final, True
+    else:
+        df_final["Modo Operacao"] = "Multi"
+        df_final["Aviso"] = ""
     
-    # ✅ 3) MULTI BOM
-    df_final["Modo Operacao"] = "Multi"
     return df_final, True
+
 
 # ============================
 # 🚀 BOTÃO CALCULAR
