@@ -827,6 +827,64 @@ def simular_cenario(cargas, veiculos_usados, df_veiculos):
 
     return resultado, len(cargas_restantes)
 
+
+from collections import defaultdict
+
+def escolher_melhores_veiculos(resultado_multi):
+    """
+    Recebe a lista de veículos usada no multi-veículo
+    e retorna apenas o melhor veículo principal
+    e o complemento mínimo necessário.
+    """
+
+    if not resultado_multi:
+        return []
+
+    agrupado = defaultdict(lambda: {
+        "Veículo": "",
+        "Qtd Caixas": 0,
+        "Peso Total (kg)": 0,
+        "Viagens": 0
+    })
+
+    # Agrupa por tipo de veículo
+    for r in resultado_multi:
+        v = r["Veículo"]
+        agrupado[v]["Veículo"] = v
+        agrupado[v]["Qtd Caixas"] += r["Qtd Caixas"]
+        agrupado[v]["Peso Total (kg)"] += r.get("Peso Total (kg)", 0)
+        agrupado[v]["Viagens"] += 1
+
+    # Ordena para achar o melhor:
+    # 1º menos viagens
+    # 2º mais caixas transportadas
+    ordenado = sorted(
+        agrupado.values(),
+        key=lambda x: (x["Viagens"], -x["Qtd Caixas"])
+    )
+
+    melhor = ordenado[0]
+
+    resultado_final = [{
+        "Papel": "Principal",
+        "Veículo": melhor["Veículo"],
+        "Qtd Caixas": melhor["Qtd Caixas"],
+        "Peso Total (kg)": round(melhor["Peso Total (kg)"], 2),
+        "Viagens": melhor["Viagens"]
+    }]
+
+    # Se precisou de mais de uma viagem, considera complemento
+    if melhor["Viagens"] > 1:
+        resultado_final.append({
+            "Papel": "Complementar",
+            "Veículo": melhor["Veículo"],
+            "Qtd Caixas": "Restante",
+            "Peso Total (kg)": "",
+            "Viagens": melhor["Viagens"] - 1
+        })
+
+    return resultado_final
+
 #AJUSTE
 
 def executar_calculo(cargas, df_veiculos, selecionados):
@@ -937,10 +995,18 @@ def executar_calculo(cargas, df_veiculos, selecionados):
     # -------- DECISÃO FINAL --------
     
     if caixas_alocadas >= qtd_total_real:
+        df_rank["Modo Operacao"] = "Unico"
         return df_rank, False
     
     resultado_multi, _ = calcular_multi_veiculos(cargas, df_testar)
-    return pd.DataFrame(resultado_multi), True
+    
+    melhores_veiculos = escolher_melhores_veiculos(resultado_multi)
+    
+    df_final = pd.DataFrame(melhores_veiculos)
+    df_final["Modo Operacao"] = "Multi"
+    
+    return df_final, True
+
 
 
 # ============================
