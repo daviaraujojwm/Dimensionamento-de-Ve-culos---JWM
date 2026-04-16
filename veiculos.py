@@ -684,6 +684,9 @@ def escolher_veiculo_menor_viavel(cargas_restantes, df_veiculos):
     volume_restante = sum(c["volume"] for c in cargas_restantes)
     peso_restante = sum(c["peso"] for c in cargas_restantes)
 
+    # ✅ maior altura entre as caixas restantes
+    altura_minima = max(c["alt"] for c in cargas_restantes)
+
     veiculos_ordenados = df_veiculos.sort_values(
         by="Capacidade Volume (m³)",
         ascending=True
@@ -693,7 +696,12 @@ def escolher_veiculo_menor_viavel(cargas_restantes, df_veiculos):
         volume_max = veic["comprimento"] * veic["largura"] * veic["altura"]
         peso_max = veic["peso_max"]
 
-        if volume_restante <= volume_max and peso_restante <= peso_max:
+        # ✅ valida peso + volume + ALTURA
+        if (
+            volume_restante <= volume_max
+            and peso_restante <= peso_max
+            and altura_minima <= veic["altura"]
+        ):
             return veic
 
     return None
@@ -807,8 +815,11 @@ def calcular_multi_veiculos(cargas, df_veiculos):
         if not alocou_algum:
             break
 
+    # FINAL DO calcular_multi_veiculos (AJUSTADO)
+    total_alocado = sum(r["Qtd Caixas"] for r in resultado)
+    return resultado, total_alocado
 
-    return resultado, len(cargas_restantes)
+    
 def simular_cenario(cargas, veiculos_usados, df_veiculos):
 
     cargas_restantes = expand_cargas_unitarias(cargas)
@@ -993,8 +1004,15 @@ def executar_calculo(cargas, df_veiculos, selecionados):
     
     df_viaveis = df_status[df_status["Status"] == "Viável"]
     
+    # executar_calculo (AJUSTADO)
     if df_viaveis.empty:
-        resultado_multi, caixas_restantes = calcular_multi_veiculos(cargas, df_testar)
+        resultado_multi, total_alocado = calcular_multi_veiculos(
+            cargas,
+            df_testar
+        )
+    
+        qtd_total_real = sum(c["Quantidade"] for c in cargas)
+        caixas_restantes = qtd_total_real - total_alocado
     
         # 🔒 BLOQUEIO OBRIGATÓRIO
         if caixas_restantes > 0:
@@ -1051,7 +1069,14 @@ def executar_calculo(cargas, df_veiculos, selecionados):
         df_rank["Modo Operacao"] = "Unico"
         return df_rank, False
     
-    resultado_multi, caixas_restantes = calcular_multi_veiculos(cargas, df_testar)
+    
+    resultado_multi, total_alocado = calcular_multi_veiculos(
+        cargas,
+        df_testar
+    )
+    
+    qtd_total_real = sum(c["Quantidade"] for c in cargas)
+    caixas_restantes = qtd_total_real - total_alocado
     
     # ======================================================
     # 1) SE NÃO FECHA 100% → PARCIAL (SUGESTÃO)
