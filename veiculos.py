@@ -463,17 +463,6 @@ def calcular_score(volume_usado, volume_max, peso_usado, peso_max):
 
     return round(max(0, min(100, score)), 2)
     
-from itertools import combinations_with_replacement
-
-def gerar_cenarios(lista_veiculos, max_veiculos=3):
-    nomes = lista_veiculos["Veículo"].tolist()
-    cenarios = []
-
-    for i in range(1, max_veiculos + 1):
-        cenarios += list(combinations_with_replacement(nomes, i))
-
-    return cenarios
-    
 # ============================
 # EXPORTAR RESULTADOS PARA EXCEL
 # ============================
@@ -559,6 +548,34 @@ def cabe_no_piso_heuristica(items, comp_v, larg_v, alt_v):
             return False
 
     return True
+
+def colide(nova, ocupadas):
+    x, y, z, dx, dy, dz = nova
+    for ox, oy, oz, odx, ody, odz in ocupadas:
+        if (
+            x < ox + odx and x + dx > ox and
+            y < oy + ody and y + dy > oy and
+            z < oz + odz and z + dz > oz
+        ):
+            return True
+    return False
+
+
+def tem_base(nova, ocupadas):
+    x, y, z, dx, dy, dz = nova
+
+    if z == 0:
+        return True
+
+    for ox, oy, oz, odx, ody, odz in ocupadas:
+        if (
+            oz + odz == z and
+            x < ox + odx and x + dx > ox and
+            y < oy + ody and y + dy > oy
+        ):
+            return True
+
+    return False
 
 def simular_empilhamento_3d(
     cargas_unitarias,
@@ -1191,34 +1208,6 @@ st.success(
 💡 {motivo}
 """
 )
-def colide(nova, ocupadas):
-    x, y, z, dx, dy, dz = nova
-
-    for ox, oy, oz, odx, ody, odz in ocupadas:
-        if (
-            x < ox + odx and x + dx > ox and
-            y < oy + ody and y + dy > oy and
-            z < oz + odz and z + dz > oz
-        ):
-            return True
-    return False
-
-
-def tem_base(nova, ocupadas):
-    x, y, z, dx, dy, dz = nova
-
-    if z == 0:
-        return True
-
-    for ox, oy, oz, odx, ody, odz in ocupadas:
-        if (
-            oz + odz == z and
-            x < ox + odx and x + dx > ox and
-            y < oy + ody and y + dy > oy
-        ):
-            return True
-
-    return False
 
 # ============================
 # 🔍 SIMULAÇÃO REAL DE EMPILHAMENTO (FINAL)
