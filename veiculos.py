@@ -998,9 +998,19 @@ def executar_calculo(cargas, df_veiculos, selecionados):
         df_rank["Modo Operacao"] = "Unico"
         return df_rank, False
     
-    resultado_multi, _ = calcular_multi_veiculos(cargas, df_testar)
+    resultado_multi, caixas_restantes = calcular_multi_veiculos(cargas, df_testar)
+    
+    # 🔒 BLOQUEIO: só aceita cenário se fechar 100% da carga
+    if caixas_restantes > 0:
+        # não fechou toda a carga → cenário inválido
+        return pd.DataFrame(), True
     
     melhores_veiculos = escolher_melhores_veiculos(resultado_multi)
+    
+    df_final = pd.DataFrame(melhores_veiculos)
+    df_final["Modo Operacao"] = "Multi"
+    
+    return df_final, True
     
     df_final = pd.DataFrame(melhores_veiculos)
     df_final["Modo Operacao"] = "Multi"
