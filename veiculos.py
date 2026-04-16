@@ -1016,17 +1016,24 @@ def executar_calculo(cargas, df_veiculos, selecionados):
     melhores_veiculos = escolher_melhores_veiculos(resultado_multi)
     df_final = pd.DataFrame(melhores_veiculos)
     
-    # 🔒 NOVA REGRA FINAL
+    # 🔒 REGRA FINAL COM FALLBACK
     qtd_total_real = sum(c["Quantidade"] for c in cargas)
     caixas_principal = df_final.iloc[0]["Qtd Caixas"]
     percentual_principal = caixas_principal / qtd_total_real
     
-    # Exemplo: exige pelo menos 60%
     if percentual_principal < 0.6:
-        return pd.DataFrame(), True
+        # cenário existe, mas NÃO é ideal
+        df_final["Modo Operacao"] = "Multi (Alternativo)"
+        df_final["Aviso"] = (
+            "Nenhum cenário ideal encontrado. "
+            "Este é o melhor arranjo possível, porém com alta dependência de complemento."
+        )
+        return df_final, True
     
+    # cenário bom
     df_final["Modo Operacao"] = "Multi"
     return df_final, True
+
 
 # ============================
 # 🚀 BOTÃO CALCULAR
