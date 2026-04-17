@@ -1112,13 +1112,19 @@ def executar_calculo(cargas, df_veiculos, selecionados):
     
     # 🔁 REOTIMIZA: roda o multi novamente só com os candidatos
     df_veic_candidatos = df_testar[df_testar["Veículo"].isin(candidatos)]
-    resultado_opt, restantes_opt = calcular_multi_veiculos(cargas, df_veic_candidatos)
+    resultado_opt, total_alocado_opt = calcular_multi_veiculos(
+        cargas,
+        df_veic_candidatos
+    )
     
-    # se a reotimização piorar (não fecha), mantém o original filtrado
-    if restantes_opt > 0:
+    qtd_total_real = sum(c["Quantidade"] for c in cargas)
+    caixas_restantes_opt = qtd_total_real - total_alocado_opt
+    
+    if caixas_restantes_opt > 0:
         df_final = df_base[df_base["Veículo"].isin(candidatos)].copy()
     else:
         df_final = pd.DataFrame(resultado_opt)
+
     
     # ordena final
     df_final = df_final.sort_values(by="Qtd Caixas", ascending=False).reset_index(drop=True)
