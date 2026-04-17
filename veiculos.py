@@ -39,9 +39,10 @@ st.markdown(
 
     /* === SIDEBAR VIDRO FOSCO === */
     [data-testid="stSidebar"] {
-        background: rgba(0, 0, 0, 0.45) !important;
-        backdrop-filter: blur(8px);
-        -webkit-backdrop-filter: blur(8px);
+        background: rgba(0, 0, 0, 0.22) !important; /* ↓ transparência maior */
+        backdrop-filter: blur(12px);              /* ↑ vidro mais suave */
+        -webkit-backdrop-filter: blur(12px);
+        border-right: 1px solid rgba(255,255,255,0.15); /* acabamento */
     }
     </style>
     """,
