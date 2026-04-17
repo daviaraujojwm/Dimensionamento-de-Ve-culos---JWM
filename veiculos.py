@@ -718,7 +718,7 @@ def calcular_multi_veiculos(cargas, df_veiculos):
         reverse=True
     )
 
-    # ordenar veículos (AJUSTADO – maior para menor ✅)
+    # ordenar veículos (maior para menor)
     veiculos_ordenados = df_veiculos.sort_values(
         by="Capacidade Volume (m³)",
         ascending=False
@@ -726,25 +726,47 @@ def calcular_multi_veiculos(cargas, df_veiculos):
 
     resultado = []
     cargas_restantes = cargas_unit.copy()
-    
+
     # alerta de cargas impossíveis
     if any(c["peso"] > df_veiculos["peso_max"].max() for c in cargas_restantes):
         st.warning("⚠ Existem cargas com peso maior que qualquer veículo disponível.")
 
-    # ==============================
-    # MULTI‑VEÍCULO (ATUALIZADO)
-    # ==============================
+    LIMIAR_MINIMO_CAIXAS = 2
     TOTAL_CAIXAS = len(cargas_unit)
-    
+
     while cargas_restantes:
-    
-        # ✅ COMPLEMENTO RESIDUAL (CORREÇÃO)
-        if len(cargas_restantes) <= max(1, int(0.1 * TOTAL_CAIXAS)):
+
+        # ==================================================
+        # ✅ CONSOLIDAÇÃO ECONÔMICA DO RESÍDUO
+        # ==================================================
+        if len(cargas_restantes) <= LIMIAR_MINIMO_CAIXAS:
+
+            # tenta consolidar no último veículo usado
+            if resultado:
+                ultimo_veic = resultado[-1]["Veículo"]
+                veic_info = df_veiculos[
+                    df_veiculos["Veículo"] == ultimo_veic
+                ].iloc[0]
+
+                if all(
+                    c["peso"] <= veic_info["peso_max"]
+                    for c in cargas_restantes
+                ):
+                    resultado[-1]["Qtd Caixas"] += len(cargas_restantes)
+                    resultado[-1]["Peso Total (kg)"] = round(
+                        resultado[-1]["Peso Total (kg)"] +
+                        sum(c["peso"] for c in cargas_restantes),
+                        2
+                    )
+                    cargas_restantes = []
+                    break
+
+            # se não conseguiu consolidar, cria novo veículo
             veic_menor = escolher_veiculo_menor_viavel(
                 cargas_restantes,
                 df_veiculos
             )
-    
+
             if veic_menor is not None:
                 resultado.append({
                     "Veículo": veic_menor["Veículo"],
@@ -755,28 +777,31 @@ def calcular_multi_veiculos(cargas, df_veiculos):
                 })
                 cargas_restantes = []
                 break
-    
+
+        # ==================================================
+        # 🚛 LOOP NORMAL DE ALOCAÇÃO
+        # ==================================================
         alocou_algum = False
-    
+
         for _, veic in veiculos_ordenados.iterrows():
-    
+
             if not cargas_restantes:
                 break
-    
+
             comp_v = veic["comprimento"]
             larg_v = veic["largura"]
             alt_v = veic["altura"]
             peso_max = veic["peso_max"]
-    
+
             alocadas = []
             peso_total = 0
             volume_ocupado = 0
             novas_restantes = []
-    
+
             for carga in cargas_restantes:
-    
+
                 volume_carga = carga["volume"]
-    
+
                 if excede_capacidade(
                     peso_total,
                     volume_ocupado,
@@ -787,14 +812,14 @@ def calcular_multi_veiculos(cargas, df_veiculos):
                 ):
                     novas_restantes.append(carga)
                     continue
-    
+
                 cabe = cabe_no_piso_heuristica(
                     alocadas + [carga],
                     comp_v,
                     larg_v,
                     alt_v
                 )
-    
+
                 if cabe:
                     alocadas.append(carga)
                     peso_total += carga["peso"]
@@ -802,22 +827,22 @@ def calcular_multi_veiculos(cargas, df_veiculos):
                     alocou_algum = True
                 else:
                     novas_restantes.append(carga)
-    
+
             if alocadas:
                 resultado.append({
                     "Veículo": veic["Veículo"],
                     "Qtd Caixas": len(alocadas),
                     "Peso Total (kg)": round(peso_total, 2)
                 })
-    
+
             cargas_restantes = novas_restantes
-    
+
         if not alocou_algum:
             break
 
-    # FINAL DO calcular_multi_veiculos (AJUSTADO)
     total_alocado = sum(r["Qtd Caixas"] for r in resultado)
     return resultado, total_alocado
+
 
     
 def simular_cenario(cargas, veiculos_usados, df_veiculos):
