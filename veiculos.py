@@ -1312,20 +1312,19 @@ if not complementares.empty:
         })
 
     df_comp = pd.DataFrame(linhas)
-
-    # ✅ melhor complemento = menor quantidade necessária
+    
     melhor = df_comp.sort_values("Qtd necessária").iloc[0]["Veículo"]
-
+    
     def destacar(row):
         if row["Veículo"] == melhor:
             return ["background-color:#145A32;color:white;font-weight:bold"] * len(row)
-        return [""]
-
+        return [""] * len(row)
+    
     st.metric(
         "🚛 Quantidade mínima de veículos complementares",
         int(df_comp["Qtd necessária"].min())
     )
-
+    
     st.dataframe(
         df_comp.style.apply(destacar, axis=1),
         use_container_width=True
