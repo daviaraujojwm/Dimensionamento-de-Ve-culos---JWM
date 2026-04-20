@@ -1290,41 +1290,42 @@ if not complementares.empty:
         volume_veic = veic["largura"] * veic["comprimento"] * veic["altura"]
         peso_max = veic["peso_max"]
 
-        # ✅ capacidade real do veículo em unidades
-        capacidade_real = int(min(
+        # ✅ capacidade TOTAL deste veículo para este material
+        capacidade_total = int(min(
             volume_veic // volume_unit,
             peso_max // peso_unit
         ))
 
-        if capacidade_real <= 0:
+        if capacidade_total <= 0:
             continue  # segurança extrema
 
-        # ✅ quantidade necessária deste veículo
+        # ✅ quantidade de veículos necessária para o resíduo
         qtd_necessaria = max(
             1,
-            int((residuo_unidades / capacidade_real) + 0.999)
+            int((residuo_unidades / capacidade_total) + 0.999)
         )
 
         linhas.append({
             "Veículo": row["Veículo"],
-            "Capacidade por veículo (unid)": capacidade_real,
+            "Capacidade total (unid)": capacidade_total,
             "Qtd necessária": qtd_necessaria
         })
 
     df_comp = pd.DataFrame(linhas)
-    
+
+    # ✅ melhor complemento = menor quantidade necessária
     melhor = df_comp.sort_values("Qtd necessária").iloc[0]["Veículo"]
-    
+
     def destacar(row):
         if row["Veículo"] == melhor:
             return ["background-color:#145A32;color:white;font-weight:bold"] * len(row)
         return [""] * len(row)
-    
+
     st.metric(
         "🚛 Quantidade mínima de veículos complementares",
         int(df_comp["Qtd necessária"].min())
     )
-    
+
     st.dataframe(
         df_comp.style.apply(destacar, axis=1),
         use_container_width=True
