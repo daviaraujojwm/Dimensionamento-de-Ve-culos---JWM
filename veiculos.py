@@ -637,9 +637,15 @@ def simular_empilhamento_3d(
 
             step = max(1, min(x_max, y_max, z_max) // 10)
 
-            for x in range(0, x_max, step):
-                for y in range(0, y_max, step):
-                    for z in range(0, z_max, step):
+            # ================================
+            # ✅ LOOP EM CAMADAS (Z FORÇADO)
+            # ================================
+            
+            alturas_camadas = [i * alt_o for i in range(z_max)]
+            
+            for z in alturas_camadas:
+                for x in range(0, x_max, step):
+                    for y in range(0, y_max, step):
 
                         contador += 1
                         if contador > limite_iter:
@@ -649,7 +655,7 @@ def simular_empilhamento_3d(
                         nova = (
                             x * comp_o,
                             y * larg_o,
-                            z * alt_o,
+                            z, 
                             comp_o,
                             larg_o,
                             alt_o
@@ -1218,9 +1224,17 @@ if btn_calcular:
         st.session_state.df_result = df_result
 
         if eh_multi:
-            st.warning("⚠ Resultado gerado em modo multi-veículo.")
+            if (
+                isinstance(df_result, pd.DataFrame)
+                and "Papel" in df_result.columns
+                and not (df_result["Papel"] == "Complementar").any()
+            ):
+                st.success("✅ Veículo único atende 100% da carga (simulação confirmada)")
+            else:
+                st.warning("⚠ Planejamento com veículos complementares necessário")
         else:
             st.success("✅ Cálculo concluído com sucesso!")
+
 
 # ============================
 # 🚛 VEÍCULOS VIÁVEIS / MULTI-VEÍCULO
