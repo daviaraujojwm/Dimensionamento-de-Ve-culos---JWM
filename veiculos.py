@@ -1184,7 +1184,10 @@ def executar_calculo(cargas, df_veiculos, selecionados):
     )
     
     # ✅ CENÁRIO 1 — VEÍCULO ÚNICO (SÓ SE COUBER 100%)
+
     if caixas_alocadas >= qtd_total_real:
+        df_rank = df_rank.copy()
+        df_rank["Simulacao Confirmada"] = "✅ Sim"
         return df_rank, False
 
     # ✅ CENÁRIO 2 — MULTI VEÍCULO
@@ -1430,6 +1433,9 @@ if MODO_RANKING_ANTIGO:
         return [""] * len(row)
 
     st.subheader("🏆 Veículos Viáveis (Ranking)")
+    if "Simulacao Confirmada" in df_viaveis.columns:
+        st.success("✅ Simulação 3D confirmou que o veículo vencedor atende 100% da carga")
+
 
     st.dataframe(
         df_viaveis.style.apply(destacar, axis=1),
