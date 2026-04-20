@@ -1268,9 +1268,14 @@ if MODO_PLANEJADO:
     st.subheader("🚚 Veículo Principal")
 
     st.metric("Veículo", principal["Veículo"])
-    st.metric("Utilização planejada (%)", principal["Utilizacao Planejada (%)"])
-    st.metric("Resíduo de Volume (m³)", principal["Resíduo Volume (m³)"])
-    st.metric("Resíduo de Peso (kg)", principal["Resíduo Peso (kg)"])
+    if "Utilizacao Planejada (%)" in principal:
+        st.metric("Utilização planejada (%)", principal["Utilizacao Planejada (%)"])
+    
+    if "Resíduo Volume (m³)" in principal:
+        st.metric("Resíduo de Volume (m³)", principal["Resíduo Volume (m³)"])
+    
+    if "Resíduo Peso (kg)" in principal:
+        st.metric("Resíduo de Peso (kg)", principal["Resíduo Peso (kg)"])
 
     if "Aviso" in principal:
         st.info(principal["Aviso"])
