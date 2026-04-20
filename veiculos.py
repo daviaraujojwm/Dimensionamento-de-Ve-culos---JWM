@@ -1156,11 +1156,31 @@ def executar_calculo(cargas, df_veiculos, selecionados):
          info_principal["altura"]) // volume_unit,
         info_principal["peso_max"] // peso_unit
     ))
-
-    # ✅ CENÁRIO 1 — RANKING (UM VEÍCULO LEVA TUDO)
-    if capacidade_principal >= quantidade_carga:
-        return df_rank, False
     
+    # =====================================================
+    # ✅ DECISÃO BASEADA NA SIMULAÇÃO REAL
+    # =====================================================
+    
+    # quantidade real total de caixas
+    qtd_total_real = sum(c["Quantidade"] for c in cargas)
+    
+    # expandir cargas para simulação 3D
+    cargas_unitarias_3d = expand_cargas_unitarias(
+        cargas,
+        limite=MAX_CAIXAS_3D
+    )
+    
+    # simular empilhamento REAL do veículo ranking
+    _, caixas_alocadas, _, _ = simular_empilhamento_3d(
+        cargas_unitarias_3d,
+        info_principal,
+        qtd_total_real
+    )
+    
+    # ✅ CENÁRIO 1 — VEÍCULO ÚNICO (SÓ SE COUBER 100%)
+    if caixas_alocadas >= qtd_total_real:
+        return df_rank, False
+
     # ✅ CENÁRIO 2 — MULTI VEÍCULO
     resultado_multi, _ = calcular_multi_veiculos(
         cargas,
