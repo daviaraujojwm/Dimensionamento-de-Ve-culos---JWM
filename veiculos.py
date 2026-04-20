@@ -1069,17 +1069,100 @@ def executar_calculo(cargas, df_veiculos, selecionados):
             "Aproveitamento Peso (%)": round(peso_total / row["Peso Máx"] * 100, 2),
             "Score": score
         })
+
+
+    # ======================================
+    # RANKING DOS VEÍCULOS VIÁVEIS
+    # ======================================
     
     df_rank = (
         pd.DataFrame(resultados)
         .sort_values(by="Score", ascending=False)
         .reset_index(drop=True)
     )
+    
+    # ✅ BLOCO DE AJUSTE 1 — DEFINIÇÃO DO VEÍCULO PRINCIPAL
+    
+    veiculo_principal = df_rank.iloc[0]["Veículo"]
+    
+    info_principal = df_veiculos[
+        df_veiculos["Veículo"] == veiculo_principal
+    ].iloc[0]
+    
+    volume_principal = (
+        info_principal["largura"] *
+        info_principal["comprimento"] *
+        info_principal["altura"]
+    )
+    
+    peso_principal = info_principal["peso_max"]
+    
+    # ✅ BLOCO DE AJUSTE 2 — LIMITE OPERACIONAL SEGURO
+    
+    LIMITE_OPERACIONAL = 0.85  # 85%
+    
+    volume_principal_seguro = volume_principal * LIMITE_OPERACIONAL
+    peso_principal_seguro   = peso_principal   * LIMITE_OPERACIONAL
 
-    # ✅ BLOCO DE AJUSTE — FINAL DA FUNÇÃO
-    df_rank["Modo Operacao"] = "Unico"
-    df_rank["Aviso"] = "Carga atendida por veículo único (regra de negócio)"
-    return df_rank, False
+    # ✅ BLOCO DE AJUSTE 3 — CÁLCULO DO RESÍDUO DA CARGA
+
+    residuo_volume = max(0, volume_total - volume_principal_seguro)
+    residuo_peso   = max(0, peso_total   - peso_principal_seguro)
+    
+
+    # ✅ BLOCO DE AJUSTE 4 — BUSCA DE VEÍCULOS COMPLEMENTARES VIÁVEIS
+    
+    altura_carga_max = max(c["Altura (m)"] for c in cargas)
+    
+    veiculos_complementares = []
+    
+    for _, v in df_veiculos.iterrows():
+    
+        volume_v = v["largura"] * v["comprimento"] * v["altura"]
+    
+        if (
+            v["altura"] >= altura_carga_max and
+            v["peso_max"] >= residuo_peso and
+            volume_v >= residuo_volume
+        ):
+            if v["Veículo"] != veiculo_principal:
+                veiculos_complementares.append(v["Veículo"])
+
+
+    # ✅ PASSO 6 — RETORNO FINAL DA OPERAÇÃO (100%)
+    
+    resultado_final = []
+    
+    # 🔹 Veículo principal
+    resultado_final.append({
+        "Papel": "Principal",
+        "Veículo": veiculo_principal,
+        "Utilizacao Planejada (%)": round(LIMITE_OPERACIONAL * 100, 1),
+        "Resíduo Volume (m³)": round(residuo_volume, 2),
+        "Resíduo Peso (kg)": round(residuo_peso, 2),
+        "Score": df_rank.iloc[0]["Score"]
+    })
+    
+    # 🔹 Veículos complementares (lista viável)
+    for v in veiculos_complementares:
+        resultado_final.append({
+            "Papel": "Complementar",
+            "Veículo": v,
+            "Utilizacao Planejada (%)": "",
+            "Resíduo Volume (m³)": "",
+            "Resíduo Peso (kg)": "",
+            "Score": ""
+        })
+    
+    df_resultado = pd.DataFrame(resultado_final)
+    
+    df_resultado["Modo Operacao"] = "Operação fechada 100%"
+    df_resultado["Aviso"] = (
+        "Planejamento conservador: veículo principal "
+        "com complemento para garantir 100% da carga."
+    )
+    
+    return df_resultado, bool(veiculos_complementares)
 
 # ============================
 # 🚀 BOTÃO CALCULAR
@@ -1120,207 +1203,104 @@ if df_base.empty:
     st.info("Clique em calcular para gerar o dimensionamento.")
     st.stop()
 
-# ============================
-# 🔴 MODO MULTI-VEÍCULO
-# ============================
-if "Status" not in df_base.columns:
-    st.warning("⚠️ Resultado exibido no modo multi-veículo (sem ranking).")
 
-    # ✅ PASSO 1 — organizar por quem carrega mais caixas
-    df_multi = df_base.copy()
-    df_multi = (
-        df_multi
-        .sort_values(by="Qtd Caixas", ascending=False)
+# ============================
+# 🔎 DETECÇÃO DO MODO DE OPERAÇÃO
+# ============================
+
+MODO_PLANEJADO = (
+    isinstance(df_base, pd.DataFrame)
+    and not df_base.empty
+    and "Papel" in df_base.columns
+    and "Modo Operacao" in df_base.columns
+)
+
+MODO_RANKING_ANTIGO = (
+    isinstance(df_base, pd.DataFrame)
+    and not df_base.empty
+    and "Status" in df_base.columns
+)
+
+# ============================
+# 📦 PLANEJAMENTO DA OPERAÇÃO (100%)
+# ============================
+if MODO_PLANEJADO:
+
+    st.subheader("📦 Planejamento da Operação (100% da carga)")
+
+    df_plan = df_base.copy()
+
+    principal = df_plan[df_plan["Papel"] == "Principal"].iloc[0]
+    complementares = df_plan[df_plan["Papel"] == "Complementar"]
+
+    # ----------------------------
+    # 🚚 VEÍCULO PRINCIPAL
+    # ----------------------------
+    st.subheader("🚚 Veículo Principal")
+
+    st.metric("Veículo", principal["Veículo"])
+    st.metric(
+        "Utilização planejada (%)",
+        principal["Utilizacao Planejada (%)"]
+    )
+    st.metric(
+        "Resíduo de Volume (m³)",
+        principal["Resíduo Volume (m³)"]
+    )
+    st.metric(
+        "Resíduo de Peso (kg)",
+        principal["Resíduo Peso (kg)"]
+    )
+
+    if "Aviso" in principal:
+        st.info(principal["Aviso"])
+
+    # ----------------------------
+    # ➕ VEÍCULOS COMPLEMENTARES
+    # ----------------------------
+    if not complementares.empty:
+        st.subheader("➕ Veículos Complementares Viáveis")
+        st.dataframe(
+            complementares[["Veículo"]],
+            use_container_width=True
+        )
+    else:
+        st.success("✅ Nenhum complemento necessário.")
+
+    # 🔒 encerra o fluxo corretamente
+    st.stop()
+
+# ============================
+# 🟢 MODO VEÍCULO ÚNICO (RANKING ANTIGO)
+# ============================
+if MODO_RANKING_ANTIGO:
+    df_viaveis = df_base[df_base["Status"] == "Viável"].copy()
+
+    if df_viaveis.empty:
+        st.warning("⚠ Nenhum veículo viável encontrado.")
+        st.stop()
+
+    df_viaveis = (
+        df_viaveis
+        .sort_values(by="Score", ascending=False)
         .reset_index(drop=True)
     )
 
-    # ✅ definir papel
-    df_multi["Papel"] = "Complementar"
-    if not df_multi.empty:
-        df_multi.loc[0, "Papel"] = "Principal"
+    df_viaveis["Ranking"] = df_viaveis.index + 1
 
-    # ✅ veículo principal
-    principal = df_multi.iloc[0]
+    melhor_veiculo = df_viaveis.iloc[0]["Veículo"]
 
-    st.subheader("🚚 Veículo Principal")
-    st.metric("Veículo", principal["Veículo"])
-    st.metric("Caixas transportadas", principal["Qtd Caixas"])
-    st.metric("Peso total (kg)", principal["Peso Total (kg)"])
+    def destacar(row):
+        if row["Veículo"] == melhor_veiculo:
+            return ["background-color:#145A32;color:white;font-weight:bold"] * len(row)
+        return [""] * len(row)
 
-    # ✅ quantidade REAL de caixas da carga
-    qtd_total_real = sum(c["Quantidade"] for c in st.session_state.cargas)
-    
-    # caixas do veículo principal
-    caixas_principal = principal["Qtd Caixas"]
-    
-    # caixas realmente alocadas nos complementares
-    caixas_complementares = (
-        df_multi[df_multi["Papel"] == "Complementar"]["Qtd Caixas"]
-        .astype(int)
-        .sum()
+    st.subheader("🏆 Veículos Viáveis (Ranking)")
+
+    st.dataframe(
+        df_viaveis.style.apply(destacar, axis=1),
+        use_container_width=True
     )
-    
-    caixas_restantes = caixas_complementares
-
-    
-    st.metric(
-        "📦 Caixas remanescentes (necessitaram complemento)",
-        caixas_restantes
-    )
-    
-    # ✅ percentual CORRETO (baseado na carga real)
-    percentual_resolvido = (caixas_principal / qtd_total_real) * 100
-    
-    st.metric(
-        "✅ Percentual da carga resolvida pelo veículo principal",
-        f"{percentual_resolvido:.1f}%"
-    )
-
-    # ✅ PASSO 4 — interpretação automática da decisão
-    if percentual_resolvido >= 70:
-        st.success(
-            f"""
-✅ **Excelente decisão**
-
-O veículo principal resolve **{percentual_resolvido:.1f}%** da carga total.
-O complemento é mínimo e não compromete a eficiência da operação.
-"""
-        )
-    elif percentual_resolvido >= 50:
-        st.warning(
-            f"""
-⚠️ **Decisão aceitável**
-
-O veículo principal resolve **{percentual_resolvido:.1f}%** da carga.
-A operação depende de complemento para uma parte relevante da carga.
-"""
-        )
-    else:
-        st.error(
-            f"""
-❗ **Alta dependência de complemento**
-
-O veículo principal resolve apenas **{percentual_resolvido:.1f}%** da carga.
-Pode valer a pena avaliar outro arranjo logístico.
-"""
-        )
-
-    # ✅ PASSO 5 — score do conjunto multi-veículo
-    qtd_veiculos = len(df_multi)
-    penalidade_fragmentacao = (qtd_veiculos - 1) * 5
-
-    score_conjunto = max(
-        0,
-        min(100, percentual_resolvido - penalidade_fragmentacao)
-    )
-
-    st.metric(
-        "📊 Score do conjunto multi-veículo",
-        f"{score_conjunto:.1f}"
-    )
-
-    # ✅ PASSO 6 — comparação com melhor veículo único (se existir)
-    df_unico = df_base.copy()
-
-    if "Score" in df_unico.columns:
-        df_unico_viavel = (
-            df_unico[df_unico["Status"] == "Viável"]
-            .sort_values(by="Score", ascending=False)
-        )
-
-        if not df_unico_viavel.empty:
-            melhor_unico = df_unico_viavel.iloc[0]
-            score_unico = melhor_unico["Score"]
-            diferenca = score_conjunto - score_unico
-
-            st.subheader("⚖️ Comparação: Multi‑veículo × Veículo Único")
-
-            st.write(
-                f"""
-- 🔹 **Melhor veículo único:** {melhor_unico['Veículo']}  
-- 🔹 **Score veículo único:** {score_unico:.1f}  
-- 🔹 **Score multi‑veículo:** {score_conjunto:.1f}  
-"""
-            )
-
-            if diferenca >= 10:
-                st.success(
-                    f"""
-✅ **Multi‑veículo claramente superior**
-
-O multi‑veículo apresenta um ganho relevante
-(**+{diferenca:.1f} pontos**) em relação à melhor opção de veículo único.
-"""
-                )
-            elif diferenca >= -5:
-                st.warning(
-                    f"""
-⚠️ **Resultados similares**
-
-O multi‑veículo e o veículo único apresentam eficiência muito próxima.
-A decisão pode considerar fatores operacionais ou de custo.
-"""
-                )
-            else:
-                st.error(
-                    f"""
-❗ **Veículo único mais eficiente**
-
-O melhor veículo único apresenta vantagem de
-(**{abs(diferenca):.1f} pontos**).
-O uso de múltiplos veículos pode não ser necessário.
-"""
-                )
-
-    # ✅ tabela completa
-    with st.expander("📋 Detalhe completo da alocação"):
-        st.dataframe(df_multi, use_container_width=True)
-
-    st.info(
-        f"""
-🧠 **Decisão tomada automaticamente**
-
-O veículo **{principal['Veículo']}** foi definido como **principal**
-por transportar a maior parte da carga.
-
-A carga remanescente foi distribuída entre veículos complementares
-para garantir viabilidade total da operação.
-"""
-    )
-
-    st.stop()
-
-# ============================
-# 🟢 MODO VEÍCULO ÚNICO (RANKING)
-# ============================
-
-df_viaveis = df_base[df_base["Status"] == "Viável"].copy()
-
-if df_viaveis.empty:
-    st.warning("⚠ Nenhum veículo viável encontrado.")
-    st.stop()
-
-df_viaveis = (
-    df_viaveis
-    .sort_values(by="Score", ascending=False)
-    .reset_index(drop=True)
-)
-
-df_viaveis["Ranking"] = df_viaveis.index + 1
-
-melhor_veiculo = df_viaveis.iloc[0]["Veículo"]
-
-def destacar(row):
-    if row["Veículo"] == melhor_veiculo:
-        return ["background-color:#145A32;color:white;font-weight:bold"] * len(row)
-    return [""] * len(row)
-
-st.subheader("🏆 Veículos Viáveis (Ranking)")
-
-st.dataframe(
-    df_viaveis.style.apply(destacar, axis=1),
-    use_container_width=True
-)
 
 # ============================
 # 🧠 EXPLICAÇÃO DO MELHOR VEÍCULO
@@ -1402,12 +1382,22 @@ if st.button("🔍 Simular Empilhamento"):
         st.error("❌ Nenhum veículo viável encontrado.")
         st.stop()
 
-    # melhor veículo pelo score
-    melhor_veiculo = (
-        df_viaveis
-        .sort_values(by="Score", ascending=False)
-        .iloc[0]["Veículo"]
-    )
+    if MODO_PLANEJADO:
+        principal = (
+            st.session_state.df_result[
+                st.session_state.df_result["Papel"] == "Principal"
+            ]
+            .iloc[0]
+        )
+        melhor_veiculo = principal["Veículo"]
+    
+    else:
+        melhor_veiculo = (
+            df_viaveis
+            .sort_values(by="Score", ascending=False)
+            .iloc[0]["Veículo"]
+        )
+
 
     veic_match = df_veiculos[df_veiculos["Veículo"] == melhor_veiculo]
     if veic_match.empty:
