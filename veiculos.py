@@ -1255,20 +1255,87 @@ if MODO_PLANEJADO:
     if "Aviso" in principal:
         st.info(principal["Aviso"])
 
-    # ----------------------------
-    # ➕ VEÍCULOS COMPLEMENTARES
-    # ----------------------------
-    if not complementares.empty:
-        st.subheader("➕ Veículos Complementares Viáveis")
-        st.dataframe(
-            complementares[["Veículo"]],
-            use_container_width=True
-        )
-    else:
-        st.success("✅ Nenhum complemento necessário.")
+# ----------------------------
+# ➕ VEÍCULOS COMPLEMENTARES
+# ----------------------------
+if not complementares.empty:
 
-    # 🔒 encerra o fluxo corretamente
-    st.stop()
+    st.subheader("➕ Veículos Complementares Viáveis")
+
+    # 🔢 carga base (maior volume unitário)
+    carga_base = max(
+        st.session_state.cargas,
+        key=lambda c: c["Comprimento (m)"] * c["Largura (m)"] * c["Altura (m)"]
+    )
+
+    volume_unit = (
+        carga_base["Comprimento (m)"] *
+        carga_base["Largura (m)"] *
+        carga_base["Altura (m)"]
+    )
+    peso_unit = carga_base["Peso unitário (kg)"]
+
+    # 🔹 resíduo convertido em UNIDADES
+    residuo_unidades = max(
+        int((principal["Resíduo Volume (m³)"] / volume_unit) + 0.999),
+        int((principal["Resíduo Peso (kg)"] / peso_unit) + 0.999)
+    )
+
+    linhas = []
+
+    for _, row in complementares.iterrows():
+
+        veic = df_veiculos[df_veiculos["Veículo"] == row["Veículo"]].iloc[0]
+
+        volume_veic = veic["largura"] * veic["comprimento"] * veic["altura"]
+        peso_max = veic["peso_max"]
+
+        # ✅ capacidade real do veículo em unidades
+        capacidade_real = int(min(
+            volume_veic // volume_unit,
+            peso_max // peso_unit
+        ))
+
+        if capacidade_real <= 0:
+            continue  # segurança extrema
+
+        # ✅ quantidade necessária deste veículo
+        qtd_necessaria = max(
+            1,
+            int((residuo_unidades / capacidade_real) + 0.999)
+        )
+
+        linhas.append({
+            "Veículo": row["Veículo"],
+            "Capacidade por veículo (unid)": capacidade_real,
+            "Qtd necessária": qtd_necessaria
+        })
+
+    df_comp = pd.DataFrame(linhas)
+
+    # ✅ melhor complemento = menor quantidade necessária
+    melhor = df_comp.sort_values("Qtd necessária").iloc[0]["Veículo"]
+
+    def destacar(row):
+        if row["Veículo"] == melhor:
+            return ["background-color:#145A32;color:white;font-weight:bold"] * len(row)
+        return [""]
+
+    st.metric(
+        "🚛 Quantidade mínima de veículos complementares",
+        int(df_comp["Qtd necessária"].min())
+    )
+
+    st.dataframe(
+        df_comp.style.apply(destacar, axis=1),
+        use_container_width=True
+    )
+
+else:
+    st.success("✅ Nenhum complemento necessário.")
+
+# 🔒 encerra o fluxo corretamente
+st.stop()
 
 # ============================
 # 🟢 MODO VEÍCULO ÚNICO (RANKING ANTIGO)
