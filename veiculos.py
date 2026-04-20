@@ -1225,7 +1225,8 @@ if btn_calcular:
         st.warning("Nenhum resultado encontrado.")
     else:
         st.session_state.df_result = df_result
-
+        st.session_state.eh_multi = eh_multi   # ✅ AQUI
+        
         if eh_multi:
             if (
                 isinstance(df_result, pd.DataFrame)
@@ -1252,17 +1253,18 @@ if df_base.empty:
 
 
 # ============================
-# 🔎 DETECÇÃO DO MODO DE OPERAÇÃO
+# 🔎 DETECÇÃO DO MODO DE OPERAÇÃO (AJUSTADO)
 # ============================
+
+eh_multi = st.session_state.get("eh_multi", False)
 
 MODO_PLANEJADO = (
     isinstance(df_base, pd.DataFrame)
     and not df_base.empty
-    and "Papel" in df_base.columns
-    and "Modo Operacao" in df_base.columns
+    and eh_multi is True
 )
 
-MODO_RANKING_ANTIGO = (
+MODO_RANKING = (
     isinstance(df_base, pd.DataFrame)
     and not df_base.empty
     and "Status" in df_base.columns
@@ -1410,7 +1412,7 @@ if MODO_PLANEJADO:
 # ============================
 # 🟢 MODO VEÍCULO ÚNICO (RANKING ANTIGO)
 # ============================
-if MODO_RANKING_ANTIGO:
+if MODO_RANKING:
     df_viaveis = df_base[df_base["Status"] == "Viável"].copy()
 
     if df_viaveis.empty:
