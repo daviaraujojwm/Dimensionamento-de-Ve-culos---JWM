@@ -1081,7 +1081,9 @@ def executar_calculo(cargas, df_veiculos, selecionados):
         .reset_index(drop=True)
     )
     
-    # ✅ BLOCO DE AJUSTE 1 — DEFINIÇÃO DO VEÍCULO PRINCIPAL
+    # =====================================================
+    # ✅ DEFINIÇÃO DO VEÍCULO PRINCIPAL (ÚNICA)
+    # =====================================================
     
     veiculo_principal = df_rank.iloc[0]["Veículo"]
     
@@ -1097,35 +1099,63 @@ def executar_calculo(cargas, df_veiculos, selecionados):
     
     peso_principal = info_principal["peso_max"]
     
-    # ✅ BLOCO DE AJUSTE 2 — LIMITE OPERACIONAL SEGURO
+    # =====================================================
+    # ✅ CAPACIDADE REAL DO VEÍCULO (UNIDADES)
+    # =====================================================
     
-    LIMITE_OPERACIONAL = 0.85  # 85%
+    quantidade_carga = sum(c["Quantidade"] for c in cargas)
     
-    volume_principal_seguro = volume_principal * LIMITE_OPERACIONAL
-    peso_principal_seguro   = peso_principal   * LIMITE_OPERACIONAL
-
-    # ✅ BLOCO DE AJUSTE 3 — CÁLCULO DO RESÍDUO DA CARGA
-
-    residuo_volume = max(0, volume_total - volume_principal_seguro)
-    residuo_peso   = max(0, peso_total   - peso_principal_seguro)
+    carga_base = max(
+        cargas,
+        key=lambda c: c["Comprimento (m)"] * c["Largura (m)"] * c["Altura (m)"]
+    )
     
-
-    # ✅ BLOCO DE AJUSTE 4 — BUSCA DE VEÍCULOS COMPLEMENTARES VIÁVEIS
+    volume_unit = (
+        carga_base["Comprimento (m)"] *
+        carga_base["Largura (m)"] *
+        carga_base["Altura (m)"]
+    )
     
-    altura_carga_max = max(c["Altura (m)"] for c in cargas)
+    peso_unit = carga_base["Peso unitário (kg)"]
     
-    veiculos_complementares = []
+    capacidade_total_principal = int(min(
+        volume_principal // volume_unit,
+        peso_principal // peso_unit
+    ))
     
-    for _, v in df_veiculos.iterrows():
+    # =====================================================
+    # ✅ DECISÃO FINAL (UMA ÚNICA VEZ)
+    # =====================================================
     
-        volume_v = v["largura"] * v["comprimento"] * v["altura"]
+    if quantidade_carga <= capacidade_total_principal:
+        # ✅ CABE TUDO → SEM COMPLEMENTO
+        LIMITE_OPERACIONAL_APLICADO = 1.0
+        residuo_volume = 0
+        residuo_peso = 0
+        veiculos_complementares = []
+    else:
+        # ❌ NÃO CABE → APLICA REGRA CONSERVADORA
+        LIMITE_OPERACIONAL_APLICADO = 0.85
     
-        if (
-            v["altura"] >= altura_carga_max and
-            v["peso_max"] >= residuo_peso and
-            volume_v >= residuo_volume
-        ):
-            if v["Veículo"] != veiculo_principal:
+        volume_principal_seguro = volume_principal * LIMITE_OPERACIONAL_APLICADO
+        peso_principal_seguro   = peso_principal   * LIMITE_OPERACIONAL_APLICADO
+    
+        residuo_volume = max(0, volume_total - volume_principal_seguro)
+        residuo_peso   = max(0, peso_total   - peso_principal_seguro)
+    
+        # ✅ BUSCA DE COMPLEMENTARES SOMENTE SE HOUVER RESÍDUO
+        veiculos_complementares = []
+        altura_carga_max = max(c["Altura (m)"] for c in cargas)
+    
+        for _, v in df_veiculos.iterrows():
+            volume_v = v["largura"] * v["comprimento"] * v["altura"]
+    
+            if (
+                v["altura"] >= altura_carga_max and
+                v["peso_max"] >= residuo_peso and
+                volume_v >= residuo_volume and
+                v["Veículo"] != veiculo_principal
+            ):
                 veiculos_complementares.append(v["Veículo"])
 
 
@@ -1137,7 +1167,7 @@ def executar_calculo(cargas, df_veiculos, selecionados):
     resultado_final.append({
         "Papel": "Principal",
         "Veículo": veiculo_principal,
-        "Utilizacao Planejada (%)": round(LIMITE_OPERACIONAL * 100, 1),
+        "Utilizacao Planejada (%)": round(LIMITE_OPERACIONAL_APLICADO * 100, 1),
         "Resíduo Volume (m³)": round(residuo_volume, 2),
         "Resíduo Peso (kg)": round(residuo_peso, 2),
         "Score": df_rank.iloc[0]["Score"]
@@ -1246,39 +1276,51 @@ if MODO_PLANEJADO:
         st.info(principal["Aviso"])
 
     # =================================================
-    # 📦 CAPACIDADE TOTAL DO VEÍCULO PRINCIPAL (UNIDADES)
+    # 📦 CAPACIDADE DO VEÍCULO x CARGA (UNIDADES)
     # =================================================
-
-    # carga base (maior caixa)
+    
+    # quantidade total informada pelo usuário
+    quantidade_carga = sum(c["Quantidade"] for c in st.session_state.cargas)
+    
+    # carga base (maior volume unitário)
     carga_base = max(
         st.session_state.cargas,
         key=lambda c: c["Comprimento (m)"] * c["Largura (m)"] * c["Altura (m)"]
     )
-
+    
     volume_unit = (
         carga_base["Comprimento (m)"] *
         carga_base["Largura (m)"] *
         carga_base["Altura (m)"]
     )
     peso_unit = carga_base["Peso unitário (kg)"]
-
+    
+    # dados do veículo principal
     info_principal = df_veiculos[
         df_veiculos["Veículo"] == principal["Veículo"]
     ].iloc[0]
-
+    
     capacidade_total_principal = int(min(
         (info_principal["largura"] *
          info_principal["comprimento"] *
          info_principal["altura"]) // volume_unit,
         info_principal["peso_max"] // peso_unit
     ))
-
-    # ✅ EXIBIÇÃO CLARA AO USUÁRIO
-    st.metric(
-        "Capacidade máxima do veículo (unidades)",
-        capacidade_total_principal
-    )
-
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.metric("Unidades da carga", quantidade_carga)
+    
+    with col2:
+        st.metric("Capacidade máxima do veículo", capacidade_total_principal)
+    
+    with col3:
+        st.metric(
+            "Ocupação",
+            f"{quantidade_carga} / {capacidade_total_principal}"
+        )
+        
     # ----------------------------
     # ➕ VEÍCULOS COMPLEMENTARES
     # ----------------------------
