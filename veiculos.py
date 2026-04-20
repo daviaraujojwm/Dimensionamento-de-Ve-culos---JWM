@@ -1075,106 +1075,11 @@ def executar_calculo(cargas, df_veiculos, selecionados):
         .sort_values(by="Score", ascending=False)
         .reset_index(drop=True)
     )
-    
-    # -------- SIMULA EMPILHAMENTO NO MELHOR VEÍCULO --------
-    
-    melhor_veiculo = df_rank.iloc[0]["Veículo"]
-    veic = df_veiculos[df_veiculos["Veículo"] == melhor_veiculo].iloc[0]
-    
-    qtd_total_real = sum(c["Quantidade"] for c in cargas)
-    
-    _, caixas_alocadas, _, _ = simular_empilhamento_3d(
-        cargas_unit,
-        veic,
-        qtd_total_real
-    )
-    
-    # -------- DECISÃO FINAL --------
-    
-    if caixas_alocadas >= qtd_total_real:
-        df_rank["Modo Operacao"] = "Unico"
-        return df_rank, False
-    
-    
-    resultado_multi, total_alocado = calcular_multi_veiculos(
-        cargas,
-        df_testar
-    )
-    
-    qtd_total_real = sum(c["Quantidade"] for c in cargas)
-    caixas_restantes = qtd_total_real - total_alocado
-    
-    # ======================================================
-    # 1) SE NÃO FECHA 100% → PARCIAL (SUGESTÃO)
-    # ======================================================
-    if caixas_restantes > 0:
-        df_parcial = pd.DataFrame(resultado_multi)
-        df_parcial = df_parcial.sort_values(
-            by="Qtd Caixas", ascending=False
-        ).reset_index(drop=True)
-    
-        df_parcial["Papel"] = "Complementar"
-        if not df_parcial.empty:
-            df_parcial.loc[0, "Papel"] = "Principal"
-    
-        df_parcial["Modo Operacao"] = "Parcial (Sugestão)"
-        df_parcial["Aviso"] = "Não fecha 100% da carga"
-        return df_parcial, True
-    
-    # ======================================================
-    # 2) FECHA 100% → OTIMIZAR E SELECIONAR MELHOR CENÁRIO
-    # ======================================================
-    # ordena resultado bruto
-    df_base = pd.DataFrame(resultado_multi).sort_values(
-        by="Qtd Caixas", ascending=False
-    ).reset_index(drop=True)
-    
-    qtd_total_real = sum(c["Quantidade"] for c in cargas)
-    df_base["Percentual"] = df_base["Qtd Caixas"] / qtd_total_real
-    
-    # candidatos iniciais (ex.: >= 15%)
-    LIMIAR_MINIMO = 0.15
-    candidatos = df_base[df_base["Percentual"] >= LIMIAR_MINIMO]["Veículo"].tolist()
-    
-    # 🔁 REOTIMIZA: roda o multi novamente só com os candidatos
-    df_veic_candidatos = df_testar[df_testar["Veículo"].isin(candidatos)]
-    resultado_opt, total_alocado_opt = calcular_multi_veiculos(
-        cargas,
-        df_veic_candidatos
-    )
-    
-    qtd_total_real = sum(c["Quantidade"] for c in cargas)
-    caixas_restantes_opt = qtd_total_real - total_alocado_opt
-    
-    if caixas_restantes_opt > 0:
-        df_final = df_base[df_base["Veículo"].isin(candidatos)].copy()
-    else:
-        df_final = pd.DataFrame(resultado_opt)
 
-    
-    # ordena final
-    df_final = df_final.sort_values(by="Qtd Caixas", ascending=False).reset_index(drop=True)
-    
-    # define papel
-    df_final["Papel"] = "Complementar"
-    df_final.loc[0, "Papel"] = "Principal"
-    
-    # avalia qualidade final
-    caixas_principal = df_final.loc[0, "Qtd Caixas"]
-    percentual_principal = caixas_principal / qtd_total_real
-    
-    if percentual_principal < 0.6:
-        df_final["Modo Operacao"] = "Multi (Alternativo)"
-        df_final["Aviso"] = (
-            "O veículo principal resolve apenas "
-            f"{percentual_principal*100:.1f}% da carga. "
-            "Pode valer a pena avaliar outro arranjo logístico."
-        )
-    else:
-        df_final["Modo Operacao"] = "Multi"
-        df_final["Aviso"] = ""
-    
-    return df_final, True
+    # ✅ BLOCO DE AJUSTE — FINAL DA FUNÇÃO
+    df_rank["Modo Operacao"] = "Unico"
+    df_rank["Aviso"] = "Carga atendida por veículo único (regra de negócio)"
+    return df_rank, False
 
 # ============================
 # 🚀 BOTÃO CALCULAR
