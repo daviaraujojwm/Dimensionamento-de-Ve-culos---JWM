@@ -1248,6 +1248,8 @@ if MODO_PLANEJADO:
     # =================================================
     # 📦 CAPACIDADE TOTAL DO VEÍCULO PRINCIPAL (UNIDADES)
     # =================================================
+
+    # carga base (maior caixa)
     carga_base = max(
         st.session_state.cargas,
         key=lambda c: c["Comprimento (m)"] * c["Largura (m)"] * c["Altura (m)"]
@@ -1271,9 +1273,10 @@ if MODO_PLANEJADO:
         info_principal["peso_max"] // peso_unit
     ))
 
-    st.info(
-        f"📦 **Capacidade total do veículo:** "
-        f"até **{capacidade_total_principal} unidades** deste material."
+    # ✅ EXIBIÇÃO CLARA AO USUÁRIO
+    st.metric(
+        "Capacidade máxima do veículo (unidades)",
+        capacidade_total_principal
     )
 
     # ----------------------------
