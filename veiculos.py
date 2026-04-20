@@ -1122,77 +1122,57 @@ def executar_calculo(cargas, df_veiculos, selecionados):
         volume_principal // volume_unit,
         peso_principal // peso_unit
     ))
-    
-    # =====================================================
-    # ✅ DECISÃO FINAL (UMA ÚNICA VEZ)
-    # =====================================================
-    
-    if quantidade_carga <= capacidade_total_principal:
-        # ✅ CABE TUDO → SEM COMPLEMENTO
-        LIMITE_OPERACIONAL_APLICADO = 1.0
-        residuo_volume = 0
-        residuo_peso = 0
-        veiculos_complementares = []
-    else:
-        # ❌ NÃO CABE → APLICA REGRA CONSERVADORA
-        LIMITE_OPERACIONAL_APLICADO = 0.85
-    
-        volume_principal_seguro = volume_principal * LIMITE_OPERACIONAL_APLICADO
-        peso_principal_seguro   = peso_principal   * LIMITE_OPERACIONAL_APLICADO
-    
-        residuo_volume = max(0, volume_total - volume_principal_seguro)
-        residuo_peso   = max(0, peso_total   - peso_principal_seguro)
-    
-        # ✅ BUSCA DE COMPLEMENTARES SOMENTE SE HOUVER RESÍDUO
-        veiculos_complementares = []
-        altura_carga_max = max(c["Altura (m)"] for c in cargas)
-    
-        for _, v in df_veiculos.iterrows():
-            volume_v = v["largura"] * v["comprimento"] * v["altura"]
-    
-            if (
-                v["altura"] >= altura_carga_max and
-                v["peso_max"] >= residuo_peso and
-                volume_v >= residuo_volume and
-                v["Veículo"] != veiculo_principal
-            ):
-                veiculos_complementares.append(v["Veículo"])
 
 
-    # ✅ PASSO 6 — RETORNO FINAL DA OPERAÇÃO (100%)
+    # =====================================================
+    # ✅ DECISÃO FINAL — APENAS 2 CENÁRIOS
+    # =====================================================
     
-    resultado_final = []
+    # ----- CAPACIDADE EM UNIDADES DO MELHOR VEÍCULO -----
     
-    # 🔹 Veículo principal
-    resultado_final.append({
-        "Papel": "Principal",
-        "Veículo": veiculo_principal,
-        "Utilizacao Planejada (%)": round(LIMITE_OPERACIONAL_APLICADO * 100, 1),
-        "Resíduo Volume (m³)": round(residuo_volume, 2),
-        "Resíduo Peso (kg)": round(residuo_peso, 2),
-        "Score": df_rank.iloc[0]["Score"]
-    })
+    quantidade_carga = sum(c["Quantidade"] for c in cargas)
     
-    # 🔹 Veículos complementares (lista viável)
-    for v in veiculos_complementares:
-        resultado_final.append({
-            "Papel": "Complementar",
-            "Veículo": v,
-            "Utilizacao Planejada (%)": "",
-            "Resíduo Volume (m³)": "",
-            "Resíduo Peso (kg)": "",
-            "Score": ""
-        })
-    
-    df_resultado = pd.DataFrame(resultado_final)
-    
-    df_resultado["Modo Operacao"] = "Operação fechada 100%"
-    df_resultado["Aviso"] = (
-        "Planejamento conservador: veículo principal "
-        "com complemento para garantir 100% da carga."
+    carga_base = max(
+        cargas,
+        key=lambda c: c["Comprimento (m)"] *
+                      c["Largura (m)"] *
+                      c["Altura (m)"]
     )
     
-    return df_resultado, bool(veiculos_complementares)
+    volume_unit = (
+        carga_base["Comprimento (m)"] *
+        carga_base["Largura (m)"] *
+        carga_base["Altura (m)"]
+    )
+    peso_unit = carga_base["Peso unitário (kg)"]
+    
+    info_principal = df_veiculos[
+        df_veiculos["Veículo"] == df_rank.iloc[0]["Veículo"]
+    ].iloc[0]
+    
+    capacidade_principal = int(min(
+        (info_principal["largura"] *
+         info_principal["comprimento"] *
+         info_principal["altura"]) // volume_unit,
+        info_principal["peso_max"] // peso_unit
+    ))
+
+    # ✅ CENÁRIO 1 — RANKING (UM VEÍCULO LEVA TUDO)
+    if capacidade_principal >= quantidade_carga:
+        return df_rank, False
+    
+    # ✅ CENÁRIO 2 — MULTI VEÍCULO
+    resultado_multi, _ = calcular_multi_veiculos(
+        cargas,
+        df_testar
+    )
+    
+    df_final = pd.DataFrame(
+        escolher_melhores_veiculos(resultado_multi)
+    )
+    df_final["Modo Operacao"] = "Multi Veículo"
+    
+    return df_final, True
 
 # ============================
 # 🚀 BOTÃO CALCULAR
