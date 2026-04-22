@@ -461,6 +461,64 @@ def calcular_score(volume_usado, volume_max, peso_usado, peso_max):
     )
 
     return round(max(0, min(100, score)), 2)
+
+def gerar_justificativa_veiculo(
+    veiculo,
+    volume_total,
+    peso_total,
+    volume_max,
+    peso_max,
+    score,
+    caixas_alocadas,
+    qtd_total_real
+):
+    aproveitamento_volume = (volume_total / volume_max) * 100
+    aproveitamento_peso = (peso_total / peso_max) * 100
+    equilibrio = 100 - abs(aproveitamento_volume - aproveitamento_peso)
+
+    texto = (
+        f"O veículo **{veiculo}** foi selecionado por apresentar o melhor "
+        f"equilíbrio técnico entre volume e peso.\n\n"
+        f"• Ocupação volumétrica: {aproveitamento_volume:.1f}%\n"
+        f"• Utilização de peso: {aproveitamento_peso:.1f}%\n"
+        f"• Índice de equilíbrio: {equilibrio:.1f}%\n"
+        f"• Score técnico final: {score:.1f}\n\n"
+    )
+
+    if caixas_alocadas >= qtd_total_real:
+        texto += (
+            "A simulação tridimensional confirmou que **100% das caixas "
+            "foram fisicamente alocadas**, validando a escolha operacional."
+        )
+    else:
+        texto += (
+            "Apesar da viabilidade teórica, a simulação tridimensional "
+            "indicou restrições físicas de empilhamento."
+        )
+
+    return texto
+
+
+def reduzir_cargas_para_simulacao(cargas, limite):
+    """
+    Reduz o número de caixas para simulação 3D
+    preservando proporções e dimensões.
+    """
+    todas = expand_cargas_unitarias(cargas, limite=10**9)
+
+    if len(todas) <= limite:
+        return todas
+
+    fator = len(todas) / limite
+    reduzidas = []
+
+    for i in range(limite):
+        idx = int(i * fator)
+        reduzidas.append(todas[idx])
+
+    return reduzidas
+
+
     
 # ============================
 # EXPORTAR RESULTADOS PARA EXCEL
@@ -854,372 +912,128 @@ def calcular_multi_veiculos(cargas, df_veiculos):
     total_alocado = sum(r["Qtd Caixas"] for r in resultado)
     return resultado, total_alocado
 
-
-    
-def simular_cenario(cargas, veiculos_usados, df_veiculos):
-
-    cargas_restantes = expand_cargas_unitarias(cargas)
-    resultado = []
-
-    for nome_veic in veiculos_usados:
-
-        veic_match = df_veiculos[df_veiculos["Veículo"] == nome_veic]
-
-        if veic_match.empty:
-            continue  # 🔥 evita crash
-
-        veic = veic_match.iloc[0]
-        
-        comp_v = veic["comprimento"]
-        larg_v = veic["largura"]
-        alt_v  = veic["altura"]
-        peso_max = veic["peso_max"]
-
-        alocadas = []
-        peso_total = 0
-
-        novas_restantes = []
-        
-        for carga in cargas_restantes:
-        
-            volume_ocupado = sum(c["volume"] for c in alocadas)
-            volume_carga = carga["volume"]
-            
-            if excede_capacidade(
-                peso_total,
-                volume_ocupado,
-                carga["peso"],
-                volume_carga,
-                peso_max,
-                comp_v * larg_v * alt_v
-            ):
-                novas_restantes.append(carga)
-                continue
-        
-            cabe = cabe_no_piso_heuristica(
-                alocadas + [carga],
-                comp_v,
-                larg_v,
-                alt_v
-            )
-        
-            if cabe:
-                alocadas.append(carga)
-                peso_total += carga["peso"]
-            else:
-                novas_restantes.append(carga)
-        
-        cargas_restantes = novas_restantes
-
-        resultado.append({
-            "Veículo": nome_veic,
-            "Qtd Caixas": len(alocadas),
-            "Peso Total (kg)": round(peso_total, 2)
-        })
-
-    return resultado, len(cargas_restantes)
-
-
-from collections import defaultdict
-
-def escolher_melhores_veiculos(resultado_multi):
-    """
-    Recebe a lista de veículos usada no multi-veículo
-    e retorna apenas o melhor veículo principal
-    e o complemento mínimo necessário.
-    """
-
-    if not resultado_multi:
-        return [], 0
-
-    agrupado = defaultdict(lambda: {
-        "Veículo": "",
-        "Qtd Caixas": 0,
-        "Peso Total (kg)": 0,
-        "Viagens": 0
-    })
-
-    # Agrupa por tipo de veículo
-    for r in resultado_multi:
-        v = r["Veículo"]
-        agrupado[v]["Veículo"] = v
-        agrupado[v]["Qtd Caixas"] += r["Qtd Caixas"]
-        agrupado[v]["Peso Total (kg)"] += r.get("Peso Total (kg)", 0)
-        agrupado[v]["Viagens"] += 1
-
-    # Ordena para achar o melhor:
-    # 1º menos viagens
-    # 2º mais caixas transportadas
-    ordenado = sorted(
-        agrupado.values(),
-        key=lambda x: (x["Viagens"], -x["Qtd Caixas"])
-    )
-
-    melhor = ordenado[0]
-
-    resultado_final = [{
-        "Papel": "Principal",
-        "Veículo": melhor["Veículo"],
-        "Qtd Caixas": melhor["Qtd Caixas"],
-        "Peso Total (kg)": round(melhor["Peso Total (kg)"], 2),
-        "Viagens": melhor["Viagens"]
-    }]
-
-    # Se precisou de mais de uma viagem, considera complemento
-    if melhor["Viagens"] > 1:
-        resultado_final.append({
-            "Papel": "Complementar",
-            "Veículo": melhor["Veículo"],
-            "Qtd Caixas": "Restante",
-            "Peso Total (kg)": "",
-            "Viagens": melhor["Viagens"] - 1
-        })
-
-    return resultado_final
-
-#AJUSTE
-
 def executar_calculo(cargas, df_veiculos, selecionados):
     """
-    Executa todo o cálculo de dimensionamento.
-    Retorna:
-        df_result (DataFrame)
-        is_multi_veiculo (bool)
+    Função central do sistema.
+    Responsável por:
+    - Calcular viabilidade
+    - Ranqueamento
+    - Simulação 3D
+    - Decidir UNICO ou MULTI
     """
 
     if not cargas:
-        return pd.DataFrame(), False
+        return pd.DataFrame(), {"cenario": None}
 
-    # filtrar veículos
-    if selecionados:
-        df_testar = df_veiculos[df_veiculos["Veículo"].isin(selecionados)]
-    else:
-        df_testar = df_veiculos.copy()
+    # --------------------------------
+    # Seleção dos veículos a testar
+    # --------------------------------
+    df_testar = (
+        df_veiculos[df_veiculos["Veículo"].isin(selecionados)]
+        if selecionados else df_veiculos.copy()
+    )
 
+    # --------------------------------
+    # Totais da carga
+    # --------------------------------
     volume_total, peso_total = calcular_totais(cargas)
 
-    cargas_unit = expand_cargas_unitarias(cargas)
-
-    resultados_viabilidade = []
+    # --------------------------------
+    # Viabilidade básica (peso + volume)
+    # --------------------------------
+    registros = []
 
     for _, veic in df_testar.iterrows():
-        comp = veic["comprimento"]
-        larg = veic["largura"]
-        alt = veic["altura"]
+        volume_max = veic["largura"] * veic["comprimento"] * veic["altura"]
         peso_max = veic["peso_max"]
-
-        volume_veic = comp * larg * alt
 
         status = "Viável"
         motivo = ""
 
-        if excede_capacidade(
-            peso_atual=0,
-            volume_atual=0,
-            peso_carga=peso_total,
-            volume_carga=volume_total,
-            peso_max=peso_max,
-            volume_max=volume_veic
-        ):
+        if volume_total > volume_max:
             status = "Inviável"
-            motivo = "Excede capacidade (peso ou volume)"
+            motivo = "Excede volume"
+        elif peso_total > peso_max:
+            status = "Inviável"
+            motivo = "Excede peso"
 
-        resultados_viabilidade.append({
+        registros.append({
             "Veículo": veic["Veículo"],
             "Status": status,
             "Motivo": motivo,
-            "Volume Veículo": volume_veic,
+            "Volume Máx": volume_max,
             "Peso Máx": peso_max
         })
 
-    df_status = pd.DataFrame(resultados_viabilidade)
-
-    # ======================================================
-    # NOVA DECISÃO BASEADA EM EMPILHAMENTO REAL
-    # ======================================================
-    
+    df_status = pd.DataFrame(registros)
     df_viaveis = df_status[df_status["Status"] == "Viável"]
-    
-    # executar_calculo (AJUSTADO)
+
+    # --------------------------------
+    # ❌ Nenhum veículo único → MULTI
+    # --------------------------------
     if df_viaveis.empty:
-        resultado_multi, total_alocado = calcular_multi_veiculos(
-            cargas,
-            df_testar
-        )
-    
-        qtd_total_real = sum(c["Quantidade"] for c in cargas)
-        caixas_restantes = qtd_total_real - total_alocado
-    
-        # 🔒 BLOQUEIO OBRIGATÓRIO
-        if caixas_restantes > 0:
-            df_final = pd.DataFrame(
-                escolher_melhores_veiculos(resultado_multi)
-            )
-            df_final["Modo Operacao"] = "Multi"
-            return df_final, {"cenario": "MULTI"}
-    
-        df_final = pd.DataFrame(
-            escolher_melhores_veiculos(resultado_multi)
-        )
-        df_final["Modo Operacao"] = "Multi"
+        resultado_multi, _ = calcular_multi_veiculos(cargas, df_testar)
+        df_final = pd.DataFrame(resultado_multi)
         return df_final, {"cenario": "MULTI"}
-    
-    # ranking dos viáveis
-    resultados = []
-    
+
+    # --------------------------------
+    # Ranqueamento por score
+    # --------------------------------
+    ranking = []
+
     for _, row in df_viaveis.iterrows():
         score = calcular_score(
             volume_total,
-            row["Volume Veículo"],
+            row["Volume Máx"],
             peso_total,
             row["Peso Máx"]
         )
-    
-        resultados.append({
+
+        ranking.append({
             "Veículo": row["Veículo"],
             "Status": "Viável",
             "Motivo": "",
-            "Aproveitamento Volume (%)": round(volume_total / row["Volume Veículo"] * 100, 2),
-            "Aproveitamento Peso (%)": round(peso_total / row["Peso Máx"] * 100, 2),
+            "Aproveitamento Volume (%)": round((volume_total / row["Volume Máx"]) * 100, 2),
+            "Aproveitamento Peso (%)": round((peso_total / row["Peso Máx"]) * 100, 2),
             "Score": score
         })
 
-
-    # ======================================
-    # RANKING DOS VEÍCULOS VIÁVEIS
-    # ======================================
-    
     df_rank = (
-        pd.DataFrame(resultados)
+        pd.DataFrame(ranking)
         .sort_values(by="Score", ascending=False)
         .reset_index(drop=True)
     )
-    
-    # =====================================================
-    # ✅ DEFINIÇÃO DO VEÍCULO PRINCIPAL (ÚNICA)
-    # =====================================================
-    
+
+    # --------------------------------
+    # ✅ Simulação 3D decide o cenário
+    # --------------------------------
     veiculo_principal = df_rank.iloc[0]["Veículo"]
-    
-    info_principal = df_veiculos[
-        df_veiculos["Veículo"] == veiculo_principal
-    ].iloc[0]
-    
-    volume_principal = (
-        info_principal["largura"] *
-        info_principal["comprimento"] *
-        info_principal["altura"]
-    )
-    
-    peso_principal = info_principal["peso_max"]
-    
-    # =====================================================
-    # ✅ CAPACIDADE REAL DO VEÍCULO (UNIDADES)
-    # =====================================================
-    
-    quantidade_carga = sum(c["Quantidade"] for c in cargas)
-    
-    carga_base = max(
-        cargas,
-        key=lambda c: c["Comprimento (m)"] * c["Largura (m)"] * c["Altura (m)"]
-    )
-    
-    volume_unit = (
-        carga_base["Comprimento (m)"] *
-        carga_base["Largura (m)"] *
-        carga_base["Altura (m)"]
-    )
-    
-    peso_unit = carga_base["Peso unitário (kg)"]
-    
-    capacidade_total_principal = int(min(
-        volume_principal // volume_unit,
-        peso_principal // peso_unit
-    ))
+    info_veic = df_veiculos[df_veiculos["Veículo"] == veiculo_principal].iloc[0]
 
-
-    # =====================================================
-    # ✅ DECISÃO FINAL — APENAS 2 CENÁRIOS
-    # =====================================================
-    
-    # ----- CAPACIDADE EM UNIDADES DO MELHOR VEÍCULO -----
-    
-    quantidade_carga = sum(c["Quantidade"] for c in cargas)
-    
-    carga_base = max(
-        cargas,
-        key=lambda c: c["Comprimento (m)"] *
-                      c["Largura (m)"] *
-                      c["Altura (m)"]
-    )
-    
-    volume_unit = (
-        carga_base["Comprimento (m)"] *
-        carga_base["Largura (m)"] *
-        carga_base["Altura (m)"]
-    )
-    peso_unit = carga_base["Peso unitário (kg)"]
-    
-    info_principal = df_veiculos[
-        df_veiculos["Veículo"] == df_rank.iloc[0]["Veículo"]
-    ].iloc[0]
-    
-    capacidade_principal = int(min(
-        (info_principal["largura"] *
-         info_principal["comprimento"] *
-         info_principal["altura"]) // volume_unit,
-        info_principal["peso_max"] // peso_unit
-    ))
-    
-    # =====================================================
-    # ✅ DECISÃO BASEADA NA SIMULAÇÃO REAL
-    # =====================================================
-    
-    # quantidade real total de caixas
     qtd_total_real = sum(c["Quantidade"] for c in cargas)
-    
-    cargas_unitarias_3d = expand_cargas_unitarias(
-        cargas,
-        limite=MAX_CAIXAS_3D
-    )
-    
-    if qtd_total_real > MAX_CAIXAS_3D:
-        st.warning(
-            f"⚠ Simulação limitada a {MAX_CAIXAS_3D} caixas "
-            f"(total real: {qtd_total_real})"
-        )
-        
-    # simular empilhamento REAL do veículo ranking
+
     _, caixas_alocadas, _, _ = simular_empilhamento_3d(
-        cargas_unitarias_3d,
-        info_principal,
+        expand_cargas_unitarias(cargas, MAX_CAIXAS_3D),
+        info_veic,
         qtd_total_real
     )
-    
-    # ✅ CENÁRIO 1 — VEÍCULO ÚNICO
+
+    # --------------------------------
+    # ✅ CENÁRIO FINAL
+    # --------------------------------
     if caixas_alocadas >= qtd_total_real:
-        df_rank = df_rank.copy()
-        df_rank["Simulacao Confirmada"] = "✅ Sim"
         return df_rank, {"cenario": "UNICO"}
-    
-    # ✅ CENÁRIO 2 — MULTI VEÍCULO
+
     resultado_multi, _ = calcular_multi_veiculos(cargas, df_testar)
-    
-    df_final = pd.DataFrame(escolher_melhores_veiculos(resultado_multi))
-    df_final["Modo Operacao"] = "Multi Veículo"
-    
+    df_final = pd.DataFrame(resultado_multi)
+
     return df_final, {"cenario": "MULTI"}
-
 # ============================
-# 🚀 BOTÃO CALCULAR 
+# 🚀 BOTÃO CALCULAR
 # ============================
 
-btn_calcular = st.button(
-    "🚀 Calcular Dimensionamento",
-    disabled=not st.session_state.cargas
-)
+if st.button("🚀 Calcular Dimensionamento", disabled=not st.session_state.cargas):
 
-if btn_calcular:
     with st.spinner("Calculando melhor cenário..."):
         df_result, meta = executar_calculo(
             st.session_state.cargas,
@@ -1227,366 +1041,166 @@ if btn_calcular:
             selecionados
         )
 
+        # salva no session_state
         st.session_state.df_result = df_result
-        st.session_state.cenario = meta["cenario"]
+        st.session_state.cenario = meta.get("cenario")
 
-        if meta["cenario"] == "MULTI":
-            if (
-                "Papel" in df_result.columns
-                and not (df_result["Papel"] == "Complementar").any()
-            ):
-                st.success("✅ Veículo único atende 100% da carga")
-            else:
-                st.warning("⚠ Planejamento com veículos complementares necessário")
-        else:
-            st.success("✅ Cálculo concluído com sucesso!")
+    # feedback básico
+    if st.session_state.cenario == "UNICO":
+        st.success("✅ Um único veículo atende 100% da carga.")
+    elif st.session_state.cenario == "MULTI":
+        st.warning("⚠ Planejamento com múltiplos veículos necessário.")
+    else:
+        st.info("Nenhum cenário definido.")
 
 # ============================
-# 📊 EXIBIÇÃO FINAL (AJUSTE DEFINITIVO)
+# 📊 EXIBIÇÃO DOS RESULTADOS
 # ============================
 
-df_base = st.session_state.df_result
-cenario = st.session_state.get("cenario")
+if (
+    isinstance(st.session_state.df_result, pd.DataFrame)
+    and not st.session_state.df_result.empty
+    and st.session_state.cenario is not None
+):
 
-if df_base is None or df_base.empty or cenario is None:
-    st.info("Clique em calcular para gerar o dimensionamento.")
-    st.stop()
-
-# =================================================
-# ✅ CENÁRIO — VEÍCULO ÚNICO
-# =================================================
-if cenario == "UNICO":
-
-    st.subheader("🏆 Veículos Viáveis (Ranking)")
-
-    df_viaveis = (
-        df_base[df_base["Status"] == "Viável"]
-        .sort_values(by="Score", ascending=False)
-        .reset_index(drop=True)
-    )
-
-    st.dataframe(df_viaveis, use_container_width=True)
-    st.stop()
-
-# =================================================
-# ✅ CENÁRIO — MULTI VEÍCULO
-# =================================================
-if cenario == "MULTI":
-
-    st.subheader("📦 Planejamento da Operação (100% da carga)")
-
-    df_plan = df_base.copy()
-    principal = df_plan[df_plan["Papel"] == "Principal"].iloc[0]
-    complementares = df_plan[df_plan["Papel"] == "Complementar"]
+    st.divider()
 
     # ----------------------------
-    # 🚚 VEÍCULO PRINCIPAL
+    # 🚚 CENÁRIO: VEÍCULO ÚNICO
     # ----------------------------
-    st.subheader("🚚 Veículo Principal")
-    st.metric("Veículo", principal["Veículo"])
-
-    # ----------------------------
-    # ➕ VEÍCULOS COMPLEMENTARES
-    # ----------------------------
-    if not complementares.empty:
-
-        carga_base = max(
-            st.session_state.cargas,
-            key=lambda c: c["Comprimento (m)"] *
-                          c["Largura (m)"] *
-                          c["Altura (m)"]
-        )
-
-        volume_unit = (
-            carga_base["Comprimento (m)"] *
-            carga_base["Largura (m)"] *
-            carga_base["Altura (m)"]
-        )
-        peso_unit = carga_base["Peso unitário (kg)"]
-
-        residuo_unidades = (
-            sum(c["Quantidade"] for c in st.session_state.cargas)
-            - principal["Qtd Caixas"]
-        )
-
-        linhas = []
-
-        for _, row in complementares.iterrows():
-
-            veic = df_veiculos[
-                df_veiculos["Veículo"] == row["Veículo"]
-            ].iloc[0]
-
-            capacidade_total = int(min(
-                (veic["largura"] *
-                 veic["comprimento"] *
-                 veic["altura"]) // volume_unit,
-                veic["peso_max"] // peso_unit
-            ))
-
-            if capacidade_total <= 0:
-                continue
-
-            qtd_necessaria = max(
-                1,
-                int((residuo_unidades / capacidade_total) + 0.999)
-            )
-
-            linhas.append({
-                "Veículo": row["Veículo"],
-                "Capacidade total (unid)": capacidade_total,
-                "Qtd necessária": qtd_necessaria
-            })
-
-        df_comp = pd.DataFrame(linhas)
-
-        melhor = df_comp.sort_values("Qtd necessária").iloc[0]["Veículo"]
-
+    if st.session_state.cenario == "UNICO":
+    
+        st.subheader("🏆 Ranking de Veículos Viáveis")
+    
+        df_rank = st.session_state.df_result.copy()
+        df_rank["Ranking"] = df_rank.index + 1
+    
+        melhor = df_rank.iloc[0]["Veículo"]
+    
         def destacar(row):
             return (
                 ["background-color:#145A32;color:white;font-weight:bold"] * len(row)
-                if row["Veículo"] == melhor else [""] * len(row)
+                if row["Veículo"] == melhor else [""]
             )
-
-        st.metric(
-            "🚛 Quantidade mínima de veículos complementares",
-            int(df_comp["Qtd necessária"].min())
+    
+        st.dataframe(
+            df_rank.style.apply(destacar, axis=1),
+            use_container_width=True
+        )
+    
+        volume_total, peso_total = calcular_totais(st.session_state.cargas)
+    
+        melhor_row = df_rank.iloc[0]
+        info_veic = df_veiculos[df_veiculos["Veículo"] == melhor_row["Veículo"]].iloc[0]
+    
+        st.info(
+            gerar_justificativa_veiculo(
+                melhor_row["Veículo"],
+                volume_total,
+                peso_total,
+                info_veic["largura"] * info_veic["comprimento"] * info_veic["altura"],
+                info_veic["peso_max"],
+                melhor_row["Score"],
+                caixas_alocadas=len(expand_cargas_unitarias(st.session_state.cargas)),
+                qtd_total_real=len(expand_cargas_unitarias(st.session_state.cargas))
+            )
         )
 
+    # ----------------------------
+    # 🚛 CENÁRIO: MULTI VEÍCULO
+    # ----------------------------
+    else:
+
+        st.subheader("📦 Planejamento Multi-Veículo")
+
         st.dataframe(
-            df_comp.style.apply(destacar, axis=1),
+            st.session_state.df_result,
             use_container_width=True
         )
 
-    else:
-        st.success("✅ Nenhum complemento necessário.")
-
-    st.stop()
+        st.warning("⚠ A carga exige mais de um veículo.")
 
 # ============================
-# 🟢 MODO VEÍCULO ÚNICO (RANKING ANTIGO)
+# 🔍 SIMULAÇÃO DE EMPILHAMENTO 3D (AJUSTADA)
 # ============================
 
-if MODO_RANKING:
-    df_viaveis = df_base[df_base["Status"] == "Viável"].copy()
+if st.button("🔍 Simular Empilhamento 3D"):
 
-    if cenario == "UNICO":
-        df_viaveis = (
-            df_base[df_base["Status"] == "Viável"]
-            .sort_values(by="Score", ascending=False)
-            .reset_index(drop=True)
-        )
-    
-        if df_viaveis.empty:
-            st.error("❌ Nenhum veículo viável encontrado.")
-            st.stop()
-
-    df_viaveis = (
-        df_viaveis
-        .sort_values(by="Score", ascending=False)
-        .reset_index(drop=True)
-    )
-
-    df_viaveis["Ranking"] = df_viaveis.index + 1
-
-    melhor_veiculo = df_viaveis.iloc[0]["Veículo"]
-
-    def destacar(row):
-        if row["Veículo"] == melhor_veiculo:
-            return ["background-color:#145A32;color:white;font-weight:bold"] * len(row)
-        return [""] * len(row)
-
-    st.subheader("🏆 Veículos Viáveis (Ranking)")
-    if "Simulacao Confirmada" in df_viaveis.columns:
-        st.success("✅ Simulação 3D confirmou que o veículo vencedor atende 100% da carga")
-
-
-    st.dataframe(
-        df_viaveis.style.apply(destacar, axis=1),
-        use_container_width=True
-    )
-
-# ============================
-# 🧠 EXPLICAÇÃO DO MELHOR VEÍCULO
-# ============================
-
-if df_viaveis.empty:
-    st.error("❌ Nenhum veículo viável encontrado.")
-    st.stop()
-
-melhor_linha = df_viaveis.iloc[0]
-
-vol = float(melhor_linha.get("Aproveitamento Volume (%)", 0) or 0)
-peso = float(melhor_linha.get("Aproveitamento Peso (%)", 0) or 0)
-score = float(melhor_linha.get("Score", 0) or 0)
-
-# 🔍 lógica de explicação
-if abs(vol - peso) < 10:
-    motivo = "Possui ótimo balanceamento entre peso e volume"
-elif vol > peso:
-    motivo = "Aproveita melhor o espaço do veículo (volume)"
-else:
-    motivo = "Aproveita melhor a capacidade de carga (peso)"
-
-# 🔥 EXIBIÇÃO PROFISSIONAL
-melhor_veiculo = melhor_linha["Veículo"]
-st.success(
-    f"""
-🏆 Melhor escolha: {melhor_veiculo}
-
-📊 Por quê?
-- Volume utilizado: {vol}%
-- Peso utilizado: {peso}%
-- Score final: {score}
-
-💡 {motivo}
-"""
-)
-
-# ============================
-# 🔍 SIMULAÇÃO REAL DE EMPILHAMENTO (FINAL)
-# ============================
-
-if st.button("🔍 Simular Empilhamento"):
-
-    # 🔒 validações iniciais
     if st.session_state.df_result.empty:
-        st.error("⚠ Execute o cálculo primeiro.")
+        st.error("Execute o cálculo antes da simulação.")
         st.stop()
 
-    if not st.session_state.cargas:
-        st.error("⚠ Nenhuma carga disponível.")
+    if st.session_state.cenario != "UNICO":
+        st.warning("Simulação 3D disponível apenas para cenário de veículo único.")
         st.stop()
 
-    if len(st.session_state.cargas) > 100:
-        st.warning("⚠ Muitas cargas podem impactar a performance.")
-    
-    # quantidade total real de caixas
+    # Veículo vencedor
+    melhor_veiculo = st.session_state.df_result.iloc[0]["Veículo"]
+    veic = df_veiculos[df_veiculos["Veículo"] == melhor_veiculo].iloc[0]
+
+    # Quantidade real de caixas
     qtd_total_real = sum(c["Quantidade"] for c in st.session_state.cargas)
 
-    # expandir cargas unitárias
-    cargas_unitarias = expand_cargas_unitarias(
+    # Redução de caixas (performance)
+    cargas_unitarias = reduzir_cargas_para_simulacao(
         st.session_state.cargas,
-        limite=MAX_CAIXAS_3D
+        MAX_CAIXAS_3D
     )
 
-    if len(cargas_unitarias) > MAX_CAIXAS_3D:
-        st.warning(
-            f"⚠ Simulação limitada a {MAX_CAIXAS_3D} caixas "
-            f"(total real: {len(cargas_unitarias)})"
-        )
-        cargas_unitarias = cargas_unitarias[:MAX_CAIXAS_3D]
+    # Corte antecipado por volume impossível
+    volume_total_caixas = sum(c["volume"] for c in cargas_unitarias)
+    volume_veiculo = veic["largura"] * veic["comprimento"] * veic["altura"]
 
-    # obter veículos viáveis
-    if "Status" in st.session_state.df_result.columns:
-        df_viaveis = st.session_state.df_result[
-            st.session_state.df_result["Status"] == "Viável"
-        ].copy()
-    else:
-        st.warning("Modo multi-veículo não suporta simulação de empilhamento.")
+    if volume_total_caixas > volume_veiculo * 1.05:
+        st.error("❌ O volume das caixas excede a capacidade física do veículo.")
         st.stop()
 
-    if df_viaveis.empty:
-        st.error("❌ Nenhum veículo viável encontrado.")
-        st.stop()
-
-    MODO_PLANEJADO = False
-    
-    if MODO_PLANEJADO:
-        principal = (
-            st.session_state.df_result[
-                st.session_state.df_result["Papel"] == "Principal"
-            ]
-            .iloc[0]
-        )
-        melhor_veiculo = principal["Veículo"]
-    
-    else:
-        melhor_veiculo = (
-            df_viaveis
-            .sort_values(by="Score", ascending=False)
-            .iloc[0]["Veículo"]
-        )
-
-
-    veic_match = df_veiculos[df_veiculos["Veículo"] == melhor_veiculo]
-    if veic_match.empty:
-        st.error(f"Veículo {melhor_veiculo} não encontrado na base.")
-        st.stop()
-
-    veic = veic_match.iloc[0]
-
-    # ✅ CHAMADA CORRETA DA FUNÇÃO 3D
-    posicoes_ocupadas, caixas_alocadas, volume_usado, peso_acumulado = (
-        simular_empilhamento_3d(
-            cargas_unitarias,
-            veic,
-            qtd_total_real
-        )
+    # Simulação 3D
+    posicoes, caixas, volume_usado, peso_usado = simular_empilhamento_3d(
+        cargas_unitarias,
+        veic,
+        qtd_total_real
     )
 
-    # métricas do veículo
-    peso_max = veic["peso_max"]
-    volume_veiculo = (
-        veic["comprimento"] *
-        veic["largura"] *
-        veic["altura"]
-    )
+    ocupacao = min(100, (volume_usado / volume_veiculo) * 100)
 
-    ocupacao = round(
-        min(100, (volume_usado / volume_veiculo) * 100),
-        2
-    )
+    st.subheader("📦 Resultado da Simulação 3D")
+    st.write(f"Veículo: **{melhor_veiculo}**")
+    st.write(f"Caixas alocadas: **{caixas}**")
+    st.write(f"Ocupação: **{ocupacao:.2f}%**")
+    st.write(f"Peso carregado: **{peso_usado:.2f} kg**")
 
-    eficiencia = calcular_score(
-        volume_usado,
-        volume_veiculo,
-        peso_acumulado,
-        peso_max
-    )
-
-    # ============================
-    # 📊 RESULTADOS
-    # ============================
-    st.subheader("📊 Resultado da Simulação")
-    st.write(f"Veículo: {melhor_veiculo}")
-    st.write(f"Volume utilizado: {volume_usado:.2f} m³")
-    st.write(f"Ocupação: {ocupacao:.2f}%")
-    st.write(f"Caixas alocadas: {caixas_alocadas}")
-    st.write(f"Peso total carregado: {peso_acumulado:.2f} kg")
-    st.write(f"Capacidade máxima do veículo: {peso_max:.2f} kg")
-    st.write(f"Eficiência: {eficiencia:.1f}%")
-
-    if caixas_alocadas < qtd_total_real:
-        st.error("⚠️ Nem todas as caixas couberam.")
+    if caixas < qtd_total_real:
+        st.error("⚠ Nem todas as caixas couberam.")
     else:
         st.success("✅ Todas as caixas foram alocadas.")
 
     # ============================
-    # 📦 VISUALIZAÇÃO 3D
+    # VISUALIZAÇÃO 3D (PLOTLY)
     # ============================
     fig = go.Figure()
     cores = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728"]
 
-    for i, item in enumerate(posicoes_ocupadas):
-        x0, y0, z0, c, l, a = item
-
+    for i, (x, y, z, c, l, a) in enumerate(posicoes):
         fig.add_trace(go.Mesh3d(
-            x=[x0, x0+c, x0+c, x0, x0, x0+c, x0+c, x0],
-            y=[y0, y0, y0+l, y0+l, y0, y0, y0+l, y0+l],
-            z=[z0, z0, z0, z0, z0+a, z0+a, z0+a, z0+a],
+            x=[x, x+c, x+c, x, x, x+c, x+c, x],
+            y=[y, y, y+l, y+l, y, y, y+l, y+l],
+            z=[z, z, z, z, z+a, z+a, z+a, z+a],
             color=cores[i % len(cores)],
             opacity=0.9,
             showscale=False
         ))
 
-    # caixa do veículo
+    # Caixa do veículo
     fig.add_trace(go.Mesh3d(
-        x=[0, veic["comprimento"], veic["comprimento"], 0, 0, veic["comprimento"], veic["comprimento"], 0],
-        y=[0, 0, veic["largura"], veic["largura"], 0, 0, veic["largura"], veic["largura"]],
-        z=[0, 0, 0, 0, veic["altura"], veic["altura"], veic["altura"], veic["altura"]],
-        opacity=0.05,
+        x=[0, veic["comprimento"], veic["comprimento"], 0,
+           0, veic["comprimento"], veic["comprimento"], 0],
+        y=[0, 0, veic["largura"], veic["largura"],
+           0, 0, veic["largura"], veic["largura"]],
+        z=[0, 0, 0, 0,
+           veic["altura"], veic["altura"], veic["altura"], veic["altura"]],
         color="gray",
+        opacity=0.05,
         showscale=False
     ))
 
@@ -1598,15 +1212,23 @@ if st.button("🔍 Simular Empilhamento"):
 
     st.plotly_chart(fig, use_container_width=True)
 
-if isinstance(st.session_state.df_result, pd.DataFrame) and not st.session_state.df_result.empty:
-    excel_file = gerar_excel_bytes(
+# ============================
+# 📥 DOWNLOAD EXCEL
+# ============================
+
+if (
+    isinstance(st.session_state.df_result, pd.DataFrame)
+    and not st.session_state.df_result.empty
+):
+
+    excel = gerar_excel_bytes(
         st.session_state.df_result,
         st.session_state.cargas
     )
 
     st.download_button(
-        label="📥 Baixar Excel",
-        data=excel_file,
-        file_name="resultado_cubagem.xlsx",
+        "📥 Baixar Excel",
+        data=excel,
+        file_name="dimensionamento_veiculos.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
