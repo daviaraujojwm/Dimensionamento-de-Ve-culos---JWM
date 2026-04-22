@@ -1078,10 +1078,11 @@ if (
         melhor = df_rank.iloc[0]["Veículo"]
     
         def destacar(row):
-            return (
-                ["background-color:#145A32;color:white;font-weight:bold"] * len(row)
-                if row["Veículo"] == melhor else [""]
-            )
+            if row["Veículo"] == melhor:
+                return ["background-color:#145A32;color:white;font-weight:bold"] * len(row)
+            else:
+                return [""] * len(row)
+
     
         st.dataframe(
             df_rank.style.apply(destacar, axis=1),
