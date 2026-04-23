@@ -3,6 +3,12 @@ import pandas as pd
 from io import BytesIO
 import plotly.graph_objects as go
 
+# 🔥 PRIMEIRA COISA
+st.set_page_config(
+    page_title="Cubagem de Veículos - JWM",
+    layout="wide"
+)
+
 MAX_CAIXAS = 300
 MAX_CAIXAS_3D = 200
 MAX_ITERACOES = 5000
@@ -11,6 +17,9 @@ MAX_GRID = 10000
 st.markdown("""
 <style>
 
+/* ============================
+   FUNDO
+============================ */
 .stApp {
     background-image: url("https://raw.githubusercontent.com/daviaraujojwm/Dimensionamento-de-Ve-culos---JWM/main/tela%20de%20fundo.png");
     background-size: cover;
@@ -18,43 +27,104 @@ st.markdown("""
     background-attachment: fixed;
 }
 
+/* overlay mais forte (melhora blur) */
 .stApp::before {
     content: "";
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.45);
+    background: rgba(0, 0, 0, 0.55);
     z-index: 0;
 }
 
-/* mantém conteúdo acima */
+/* ============================
+   CONTAINER PRINCIPAL (CARD)
+============================ */
 .block-container {
     position: relative;
     z-index: 1;
-    background: rgba(255,255,255,0.08);
-    padding: 25px;
-    border-radius: 16px;
-    backdrop-filter: blur(14px);
+
+    max-width: 1200px;
+    margin: auto;
+
+    padding: 40px 35px;
+
+    background: rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+
+    border-radius: 20px;
     border: 1px solid rgba(255,255,255,0.2);
+
+    box-shadow: 0 8px 40px rgba(0,0,0,0.35);
 }
 
+/* ============================
+   TEXTOS
+============================ */
 label {
     color: white !important;
     text-shadow: 0 1px 3px black;
 }
 
-.stTextInput input {
-    background: rgba(255,255,255,0.9);
+/* ============================
+   INPUTS
+============================ */
+.stTextInput input, 
+.stNumberInput input {
+    background: rgba(255,255,255,0.95);
     color: black;
-    border-radius: 8px;
+    border-radius: 10px;
+    padding: 10px;
+    border: none;
 }
 
-/* 🌈 TÍTULO */
+/* ============================
+   ESPAÇAMENTO ENTRE ELEMENTOS
+============================ */
+.stTextInput, 
+.stNumberInput, 
+.stSelectbox {
+    margin-bottom: 18px;
+}
+
+h2, h3 {
+    margin-top: 25px;
+    margin-bottom: 15px;
+}
+
+/* ============================
+   BOTÕES
+============================ */
+.stButton button {
+    border-radius: 10px;
+    padding: 10px 18px;
+    font-weight: 600;
+    transition: 0.2s;
+}
+
+.stButton button:hover {
+    transform: scale(1.03);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+}
+
+/* ============================
+   TÍTULO GRADIENTE
+============================ */
 .titulo-gradient {
     font-size: 42px;
     font-weight: 800;
     background: linear-gradient(90deg, #ff0000, #cc0000, #990000);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
+}
+
+/* ============================
+   RESPONSIVIDADE
+============================ */
+@media (max-width: 768px) {
+    .block-container {
+        padding: 20px !important;
+    }
 }
 
 </style>
@@ -169,6 +239,11 @@ with col2:
 # ============================
 st.subheader("📦 Adicionar carga")
 
+col1, col2, col3, col4, col5 = st.columns(
+    [1.2, 1.2, 1.2, 1.2, 0.8],
+    gap="large"
+)
+
 def parse_float(valor):
     try:
         if valor is None:
@@ -214,23 +289,10 @@ def validar_inputs(comp, larg, alt, peso, qtd=None):
     return erros
 #.
 
-col1, col2, col3, col4, col5 = st.columns(5)
-
-with col1:
-    comp_txt = st.text_input("Comprimento (m)", placeholder="ex: 1,20 ou 1.20")
-
-with col2:
-    larg_txt = st.text_input("Largura (m)", placeholder="ex: 0,80 ou 0.80")
-
-with col3:
-    alt_txt = st.text_input("Altura (m)", placeholder="ex: 1,00")
-
-with col4:
-    peso_txt = st.text_input("Peso unitário (kg)", placeholder="ex: 15,5")
-
-with col5:
-    qtd = st.number_input("Quantidade:", min_value=1, value=1, step=1)
-
+col1, col2, col3, col4, col5 = st.columns(
+    [1.2, 1.2, 1.2, 1.2, 0.8],
+    gap="large"
+)
 
 # conversão
 comp = parse_float(comp_txt)
