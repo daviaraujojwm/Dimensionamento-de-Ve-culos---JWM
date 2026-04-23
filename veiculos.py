@@ -146,7 +146,7 @@ if st.session_state.get("clear_inputs"):
 # ============================
 col1, col2 = st.columns([6, 1])
 with col1:
-    st.title("🚚 Dimensionamento de Veículos - JWM")
+    st.title("Dimensionamento de Veículos - JWM")
 with col2:
     try:
         st.image("JWM.png", width=80)
