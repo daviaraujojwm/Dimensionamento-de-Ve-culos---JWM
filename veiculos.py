@@ -462,6 +462,24 @@ def calcular_score(volume_usado, volume_max, peso_usado, peso_max):
 
     return round(max(0, min(100, score)), 2)
 
+def identificar_fator_limitante(
+    volume_usado, volume_max,
+    peso_usado, peso_max,
+    margem=5
+):
+    """
+    Identifica se a limitação do veículo foi por PESO ou VOLUME.
+    """
+    perc_vol = (volume_usado / volume_max) * 100 if volume_max > 0 else 0
+    perc_peso = (peso_usado / peso_max) * 100 if peso_max > 0 else 0
+
+    if perc_peso > perc_vol + margem:
+        return "PESO"
+    elif perc_vol > perc_peso + margem:
+        return "VOLUME"
+    else:
+        return "EQUILIBRADO"
+
 def gerar_justificativa_veiculo(
     veiculo,
     volume_total,
@@ -988,6 +1006,13 @@ def executar_calculo(cargas, df_veiculos, selecionados):
             peso_total,
             row["Peso Máx"]
         )
+        
+        # ✅ penalização por baixa eficiência volumétrica quando o peso é o limitante
+        aproveitamento_volume = (volume_total / row["Volume Máx"]) * 100
+        aproveitamento_peso = (peso_total / row["Peso Máx"]) * 100
+        
+        if aproveitamento_volume < 20 and aproveitamento_peso > 60:
+            score *= 0.85
 
         ranking.append({
             "Veículo": row["Veículo"],
@@ -1093,7 +1118,14 @@ if (
     
         melhor_row = df_rank.iloc[0]
         info_veic = df_veiculos[df_veiculos["Veículo"] == melhor_row["Veículo"]].iloc[0]
-    
+
+        fator_limitante = identificar_fator_limitante(
+            volume_total,
+            info_veic["largura"] * info_veic["comprimento"] * info_veic["altura"],
+            peso_total,
+            info_veic["peso_max"]
+        )
+
         st.info(
             gerar_justificativa_veiculo(
                 melhor_row["Veículo"],
@@ -1106,6 +1138,21 @@ if (
                 qtd_total_real=len(expand_cargas_unitarias(st.session_state.cargas))
             )
         )
+
+        if fator_limitante == "PESO":
+            st.warning(
+                "⚠ **Carga limitada por PESO.**\n\n"
+                "É esperado baixo aproveitamento volumétrico neste cenário."
+            )
+        elif fator_limitante == "VOLUME":
+            st.warning(
+                "⚠ **Carga limitada por VOLUME.**\n\n"
+                "O peso do veículo ainda possui margem disponível."
+            )
+        else:
+            st.success(
+                "✅ **Carga bem equilibrada entre peso e volume.**"
+            )
 
     # ----------------------------
     # 🚛 CENÁRIO: MULTI VEÍCULO
