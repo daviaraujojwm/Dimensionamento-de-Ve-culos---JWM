@@ -1006,28 +1006,30 @@ def executar_calculo(cargas, df_veiculos, selecionados):
             peso_total,
             row["Peso Máx"]
         )
-        
-        # ✅ penalização por baixa eficiência volumétrica quando o peso é o limitante
+   
         aproveitamento_volume = (volume_total / row["Volume Máx"]) * 100
         aproveitamento_peso = (peso_total / row["Peso Máx"]) * 100
         
-        if aproveitamento_volume < 20 and aproveitamento_peso > 60:
+        penalizado = aproveitamento_volume < 20 and aproveitamento_peso > 60
+        
+        if penalizado:
             score *= 0.85
-
+        
         ranking.append({
             "Veículo": row["Veículo"],
             "Status": "Viável",
-            "Motivo": "",
-            "Aproveitamento Volume (%)": round((volume_total / row["Volume Máx"]) * 100, 2),
-            "Aproveitamento Peso (%)": round((peso_total / row["Peso Máx"]) * 100, 2),
-            "Score": score
+            "Motivo": "⚠ Baixa eficiência volumétrica" if penalizado else "",
+            "Aproveitamento Volume (%)": round(aproveitamento_volume, 2),
+            "Aproveitamento Peso (%)": round(aproveitamento_peso, 2),
+            "Score": round(score, 2)
         })
-
+                
     df_rank = (
         pd.DataFrame(ranking)
         .sort_values(by="Score", ascending=False)
         .reset_index(drop=True)
     )
+    
 
     # --------------------------------
     # ✅ Simulação 3D decide o cenário
@@ -1103,16 +1105,35 @@ if (
         melhor = df_rank.iloc[0]["Veículo"]
     
         def destacar(row):
+            styles = [""] * len(row)
+        
+            # ✅ melhor veículo
             if row["Veículo"] == melhor:
-                return ["background-color:#145A32;color:white;font-weight:bold"] * len(row)
-            else:
-                return [""] * len(row)
-
+                styles = ["background-color:#145A32;color:white;font-weight:bold"] * len(row)
+        
+            # ⚠️ veículo penalizado
+            elif row["Motivo"] != "":
+                styles = ["background-color:#FFF3CD;color:#856404"] * len(row)
+        
+            return styles
     
         st.dataframe(
             df_rank.style.apply(destacar, axis=1),
             use_container_width=True
         )
+
+        # ✅ ganho de eficiência entre 1º e 2º colocados
+        if len(df_rank) >= 2:
+            score_1 = df_rank.iloc[0]["Score"]
+            score_2 = df_rank.iloc[1]["Score"]
+        
+            if score_2 > 0:
+                ganho = ((score_1 - score_2) / score_2) * 100
+                st.info(
+                    f"📈 O veículo escolhido é **{ganho:.1f}%** mais eficiente "
+                    "do que a segunda melhor opção."
+                )
+
     
         volume_total, peso_total = calcular_totais(st.session_state.cargas)
     
