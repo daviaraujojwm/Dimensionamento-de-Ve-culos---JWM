@@ -8,84 +8,57 @@ MAX_CAIXAS_3D = 200
 MAX_ITERACOES = 5000
 MAX_GRID = 10000
 
-# ✅ CONFIG (APENAS UMA VEZ)
-st.set_page_config(page_title="Cubagem de Veículos - JWM", layout="wide")
+st.markdown("""
+<style>
 
-# ================================
-# 💎 CSS PREMIUM + GRADIENTE
-# ================================
-st.markdown(
-    """
-    <style>
+.stApp {
+    background-image: url("https://raw.githubusercontent.com/daviaraujojwm/Dimensionamento-de-Ve-culos---JWM/main/tela%20de%20fundo.png");
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+}
 
-    body {
-        background-image: url("https://raw.githubusercontent.com/daviaraujojwm/Dimensionamento-de-Ve-culos---JWM/main/tela%20de%20fundo.png");
-        background-size: cover;
-        background-position: center;
-        background-attachment: fixed;
-    }
+.stApp::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    z-index: 0;
+}
 
-    .stApp::before {
-        content: "";
-        position: fixed;
-        inset: 0;
-        background: rgba(0, 0, 0, 0.45);
-        z-index: -1;
-    }
+/* mantém conteúdo acima */
+.block-container {
+    position: relative;
+    z-index: 1;
+    background: rgba(255,255,255,0.08);
+    padding: 25px;
+    border-radius: 16px;
+    backdrop-filter: blur(14px);
+    border: 1px solid rgba(255,255,255,0.2);
+}
 
-    .block-container {
-        background: rgba(255,255,255,0.08);
-        padding: 25px;
-        border-radius: 16px;
-        backdrop-filter: blur(14px);
-        border: 1px solid rgba(255,255,255,0.2);
-    }
+label {
+    color: white !important;
+    text-shadow: 0 1px 3px black;
+}
 
-    label {
-        color: white !important;
-        text-shadow: 0 1px 3px black;
-    }
+.stTextInput input {
+    background: rgba(255,255,255,0.9);
+    color: black;
+    border-radius: 8px;
+}
 
-    .stTextInput input {
-        background: rgba(255,255,255,0.9);
-        color: black;
-        border-radius: 8px;
-    }
+/* 🌈 TÍTULO */
+.titulo-gradient {
+    font-size: 42px;
+    font-weight: 800;
+    background: linear-gradient(90deg, #ff0000, #cc0000, #990000);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
 
-    /* 🌈 TÍTULO */
-    .titulo-gradient {
-        font-size: 42px;
-        font-weight: 800;
-        background: linear-gradient(90deg, #ff0000, #cc0000, #990000);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-    }
-
-    </style>
-    """,
-    unsafe_allow_html=True
-)
-
-# ============================
-# ✅ TÍTULO NOVO (SUBSTITUI st.title)
-# ============================
-col1, col2 = st.columns([6, 1])
-
-with col1:
-    st.markdown(
-        """
-        <h1 class="titulo-gradient">
-            Dimensionamento de Veículos - JWM
-        </h1>
-        """,
-        unsafe_allow_html=True
-    )
-
-with col2:
-    try:
-        st.image("JWM.png", width=80)
-    except:
-        pass
+</style>
+""", unsafe_allow_html=True)
 
 # ============================
 # SESSION STATE INIT
