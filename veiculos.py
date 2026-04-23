@@ -52,8 +52,8 @@ st.markdown("""
     padding: 20px 25px;
 
     background: rgba(255, 255, 255, 0.085); /* mantém vidro, mais natural */
-    backdrop-filter: blur(7px);             /* blur levemente menor */
-    -webkit-backdrop-filter: blur(7px);
+    backdrop-filter: blur(4px);             /* blur levemente menor */
+    -webkit-backdrop-filter: blur(4px);
 
     border-radius: 18px;
     border: 1px solid rgba(255,255,255,0.2);
