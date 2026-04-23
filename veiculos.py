@@ -24,7 +24,7 @@ st.markdown("""
     background-image: url("https://raw.githubusercontent.com/daviaraujojwm/Dimensionamento-de-Ve-culos---JWM/main/tela%20de%20fundo.png");
     background-size: cover;
     background-position: center;
-    background-attachment: fixed;
+    background-attachment: scroll;
 }
 
 /* overlay mais forte (melhora blur) */
@@ -43,20 +43,31 @@ st.markdown("""
     position: relative;
     z-index: 1;
 
-    max-width: 1100px; /* ↓ melhor proporção */
-    margin: 40px auto; /* 🔥 centraliza vertical + horizontal */
+    max-width: 1100px;
 
-    padding: 35px 30px;
+    /* 🔥 trava na altura da tela */
+    height: calc(100vh - 80px);
 
-    background: rgba(255, 255, 255, 0.12); /* ↑ mais visível */
-    backdrop-filter: blur(10px); /* ↓ menos pesado */
+    margin: 40px auto;
+
+    padding: 25px 25px;
+
+    background: rgba(255, 255, 255, 0.12);
+    backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
 
     border-radius: 18px;
-
     border: 1px solid rgba(255,255,255,0.25);
 
     box-shadow: 0 6px 30px rgba(0,0,0,0.25);
+
+    /* 🔥 scroll só dentro do card */
+    overflow-y: auto;
+}
+
+.main .block-container {
+    padding-top: 10px !important;
+    padding-bottom: 10px !important;
 }
 
 /* ============================
