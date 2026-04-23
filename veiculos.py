@@ -27,15 +27,12 @@ st.markdown("""
     background-attachment: scroll;
 }
 
-/* overlay mais forte (melhora blur) */
+/* ✅ overlay mais leve e estável */
 .stApp::before {
     content: "";
     position: fixed;
     inset: 0;
-
-    /* ✅ overlay mais claro */
-    background: rgba(0, 0, 0, 0.18);
-
+    background: rgba(0, 0, 0, 0.22); /* ligeiramente mais escuro p/ contraste */
     z-index: 0;
 }
 
@@ -47,27 +44,21 @@ st.markdown("""
     z-index: 1;
 
     max-width: 1200px;
-
-    /* ✅ REMOVE trava de altura */
     height: auto;
 
-    margin: 20px auto;
+    /* ✅ AQUI está o ajuste correto */
+    margin: 60px auto 20px auto;  /* 🔽 desce logo sem quebrar layout */
 
     padding: 20px 25px;
 
-    /* ✅ vidro mais leve */
-    background: rgba(255, 255, 255, 0.08);
-
-    /* ✅ blur mais suave */
-    backdrop-filter: blur(6px);
-    -webkit-backdrop-filter: blur(6px);
+    background: rgba(255, 255, 255, 0.085); /* mantém vidro, mais natural */
+    backdrop-filter: blur(7px);             /* blur levemente menor */
+    -webkit-backdrop-filter: blur(7px);
 
     border-radius: 18px;
     border: 1px solid rgba(255,255,255,0.2);
+    box-shadow: 0 6px 30px rgba(0,0,0,0.22);
 
-    box-shadow: 0 6px 30px rgba(0,0,0,0.2);
-
-    /* ✅ remove scroll interno */
     overflow: visible;
 }
 
