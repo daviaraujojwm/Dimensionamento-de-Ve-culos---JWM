@@ -32,7 +32,10 @@ st.markdown("""
     content: "";
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.35); /* ↓ menos escuro */
+
+    /* ✅ overlay mais claro */
+    background: rgba(0, 0, 0, 0.18);
+
     z-index: 0;
 }
 
@@ -43,26 +46,29 @@ st.markdown("""
     position: relative;
     z-index: 1;
 
-    max-width: 1100px;
+    max-width: 1200px;
 
-    /* 🔥 trava na altura da tela */
-    height: calc(100vh - 80px);
+    /* ✅ REMOVE trava de altura */
+    height: auto;
 
-    margin: 40px auto;
+    margin: 20px auto;
 
-    padding: 25px 25px;
+    padding: 20px 25px;
 
-    background: rgba(255, 255, 255, 0.12);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
+    /* ✅ vidro mais leve */
+    background: rgba(255, 255, 255, 0.08);
+
+    /* ✅ blur mais suave */
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
 
     border-radius: 18px;
-    border: 1px solid rgba(255,255,255,0.25);
+    border: 1px solid rgba(255,255,255,0.2);
 
-    box-shadow: 0 6px 30px rgba(0,0,0,0.25);
+    box-shadow: 0 6px 30px rgba(0,0,0,0.2);
 
-    /* 🔥 scroll só dentro do card */
-    overflow-y: auto;
+    /* ✅ remove scroll interno */
+    overflow: visible;
 }
 
 .main .block-container {
