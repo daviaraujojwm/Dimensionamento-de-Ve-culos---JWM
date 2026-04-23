@@ -32,7 +32,7 @@ st.markdown("""
     content: "";
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.55);
+    background: rgba(0, 0, 0, 0.35); /* ↓ menos escuro */
     z-index: 0;
 }
 
@@ -43,39 +43,40 @@ st.markdown("""
     position: relative;
     z-index: 1;
 
-    max-width: 1200px;
-    margin: auto;
+    max-width: 1100px; /* ↓ melhor proporção */
+    margin: 40px auto; /* 🔥 centraliza vertical + horizontal */
 
-    padding: 40px 35px;
+    padding: 35px 30px;
 
-    background: rgba(255, 255, 255, 0.08);
-    backdrop-filter: blur(18px);
-    -webkit-backdrop-filter: blur(18px);
+    background: rgba(255, 255, 255, 0.12); /* ↑ mais visível */
+    backdrop-filter: blur(10px); /* ↓ menos pesado */
+    -webkit-backdrop-filter: blur(10px);
 
-    border-radius: 20px;
-    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 18px;
 
-    box-shadow: 0 8px 40px rgba(0,0,0,0.35);
+    border: 1px solid rgba(255,255,255,0.25);
+
+    box-shadow: 0 6px 30px rgba(0,0,0,0.25);
 }
 
 /* ============================
    TEXTOS
 ============================ */
 label {
-    color: white !important;
-    text-shadow: 0 1px 3px black;
+    color: #f1f1f1 !important;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+    font-weight: 500;
 }
-
 /* ============================
    INPUTS
 ============================ */
 .stTextInput input, 
 .stNumberInput input {
-    background: rgba(255,255,255,0.95);
-    color: black;
+    background: rgba(255,255,255,0.98);
+    color: #111;
     border-radius: 10px;
     padding: 10px;
-    border: none;
+    border: 1px solid rgba(0,0,0,0.15);
 }
 
 /* ============================
@@ -87,7 +88,9 @@ label {
     margin-bottom: 18px;
 }
 
-h2, h3 {
+h1, h2, h3 {
+    color: #ffffff;
+    text-shadow: 0 2px 6px rgba(0,0,0,0.5);
     margin-top: 25px;
     margin-bottom: 15px;
 }
