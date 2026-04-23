@@ -237,12 +237,30 @@ with col2:
 # ============================
 # INPUTS CARGA
 # ============================
+
 st.subheader("📦 Adicionar carga")
 
 col1, col2, col3, col4, col5 = st.columns(
     [1.2, 1.2, 1.2, 1.2, 0.8],
     gap="large"
 )
+
+with col1:
+    comp_txt = st.text_input("Comprimento (m)", placeholder="ex: 1,20 ou 1.20")
+
+with col2:
+    larg_txt = st.text_input("Largura (m)", placeholder="ex: 0,80 ou 0.80")
+
+with col3:
+    alt_txt = st.text_input("Altura (m)", placeholder="ex: 1,00")
+
+with col4:
+    peso_txt = st.text_input("Peso unitário (kg)", placeholder="ex: 15,5")
+
+with col5:
+    qtd = st.number_input("Quantidade:", min_value=1, value=1, step=1)
+
+
 
 def parse_float(valor):
     try:
@@ -254,6 +272,12 @@ def parse_float(valor):
         return float(valor)
     except:
         return None
+
+# 🔥 SÓ DEPOIS DISSO
+comp = parse_float(comp_txt)
+larg = parse_float(larg_txt)
+alt = parse_float(alt_txt)
+peso = parse_float(peso_txt)
 
 # VALIDAÇÃO DE INPUTS
 
@@ -293,13 +317,6 @@ col1, col2, col3, col4, col5 = st.columns(
     [1.2, 1.2, 1.2, 1.2, 0.8],
     gap="large"
 )
-
-# conversão
-comp = parse_float(comp_txt)
-larg = parse_float(larg_txt)
-alt = parse_float(alt_txt)
-peso = parse_float(peso_txt)
-
 
 erros = validar_inputs(comp, larg, alt, peso, qtd)
 
