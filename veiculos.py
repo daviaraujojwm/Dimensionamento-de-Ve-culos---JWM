@@ -8,46 +8,84 @@ MAX_CAIXAS_3D = 200
 MAX_ITERACOES = 5000
 MAX_GRID = 10000
 
+# ✅ CONFIG (APENAS UMA VEZ)
 st.set_page_config(page_title="Cubagem de Veículos - JWM", layout="wide")
 
+# ================================
+# 💎 CSS PREMIUM + GRADIENTE
+# ================================
 st.markdown(
     """
     <style>
-    /* === FUNDO GLOBAL COM IMAGEM === */
-    html, body {
-        height: 100%;
-    }
 
     body {
         background-image: url("https://raw.githubusercontent.com/daviaraujojwm/Dimensionamento-de-Ve-culos---JWM/main/tela%20de%20fundo.png");
         background-size: cover;
         background-position: center;
-        background-repeat: no-repeat;
         background-attachment: fixed;
     }
 
-    /* === ZERAR FUNDOS DO STREAMLIT (TEMA DARK) === */
-    .stApp,
-    section[data-testid="stAppViewContainer"],
-    section[data-testid="stSidebarContent"],
-    main,
-    .stMain,
-    .stMain > div,
-    .block-container {
-        background: transparent !important;
+    .stApp::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.45);
+        z-index: -1;
     }
 
-    /* === SIDEBAR VIDRO FOSCO === */
-    [data-testid="stSidebar"] {
-        background: rgba(0, 0, 0, 0.22) !important; /* ↓ transparência maior */
-        backdrop-filter: blur(12px);              /* ↑ vidro mais suave */
-        -webkit-backdrop-filter: blur(12px);
-        border-right: 1px solid rgba(255,255,255,0.15); /* acabamento */
+    .block-container {
+        background: rgba(255,255,255,0.08);
+        padding: 25px;
+        border-radius: 16px;
+        backdrop-filter: blur(14px);
+        border: 1px solid rgba(255,255,255,0.2);
     }
+
+    label {
+        color: white !important;
+        text-shadow: 0 1px 3px black;
+    }
+
+    .stTextInput input {
+        background: rgba(255,255,255,0.9);
+        color: black;
+        border-radius: 8px;
+    }
+
+    /* 🌈 TÍTULO */
+    .titulo-gradient {
+        font-size: 42px;
+        font-weight: 800;
+        background: linear-gradient(90deg, #ff0000, #cc0000, #990000);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+    }
+
     </style>
     """,
     unsafe_allow_html=True
 )
+
+# ============================
+# ✅ TÍTULO NOVO (SUBSTITUI st.title)
+# ============================
+col1, col2 = st.columns([6, 1])
+
+with col1:
+    st.markdown(
+        """
+        <h1 class="titulo-gradient">
+            Dimensionamento de Veículos - JWM
+        </h1>
+        """,
+        unsafe_allow_html=True
+    )
+
+with col2:
+    try:
+        st.image("JWM.png", width=80)
+    except:
+        pass
 
 # ============================
 # SESSION STATE INIT
