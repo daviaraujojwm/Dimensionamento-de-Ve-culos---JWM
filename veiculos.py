@@ -1173,13 +1173,47 @@ def executar_calculo(cargas, df_veiculos, selecionados):
         .drop(columns=["Capacidade Volume (m³)"])
     )
     
-    # ✅ REGRA NOVA: decisão UNICO vs MULTI (SEM 3D)
+    # ✅ DECISÃO FINAL: UNICO vs MULTI (ORDEM CORRETA)
+    
+    PESO_LIMITE_UNICO = 30000      # kg
+    PERCENTUAL_MAXIMO = 0.85       # 85%
     
     if not df_viaveis.empty:
-        # Existe pelo menos um veículo único viável
+    
+        veiculo_topo = df_rank.iloc[0]["Veículo"]
+        info_veic = df_veiculos[
+            df_veiculos["Veículo"] == veiculo_topo
+        ].iloc[0]
+    
+        # 🚨 LIMITE ABSOLUTO
+        if peso_total > PESO_LIMITE_UNICO:
+            resultado_multi, _ = calcular_multi_veiculos(cargas, df_testar)
+            return pd.DataFrame(resultado_multi), {"cenario": "MULTI"}
+    
+        # 🚨 LIMITE PERCENTUAL
+        if peso_total > info_veic["peso_max"] * PERCENTUAL_MAXIMO:
+            resultado_multi, _ = calcular_multi_veiculos(cargas, df_testar)
+            return pd.DataFrame(resultado_multi), {"cenario": "MULTI"}
+    
+        # 🔎 FALLBACK: TODOS OS SCORES = 0
+        if (df_rank["Score"] <= 0).all():
+            df_fallback = (
+                df_rank
+                .merge(
+                    df_veiculos[["Veículo", "Capacidade Volume (m³)"]],
+                    on="Veículo",
+                    how="left"
+                )
+                .sort_values(by="Capacidade Volume (m³)", ascending=True)
+                .head(1)
+                .drop(columns=["Capacidade Volume (m³)"])
+            )
+            return df_fallback.reset_index(drop=True), {"cenario": "UNICO"}
+    
+        # ✅ CASO NORMAL
         return df_rank, {"cenario": "UNICO"}
     
-    # ❌ Só chega aqui se NENHUM veículo único for viável
+    # ❌ NENHUM VEÍCULO ÚNICO VIÁVEL
     resultado_multi, _ = calcular_multi_veiculos(cargas, df_testar)
     return pd.DataFrame(resultado_multi), {"cenario": "MULTI"}
 
