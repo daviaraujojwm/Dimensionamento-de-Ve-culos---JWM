@@ -1151,7 +1151,12 @@ def executar_calculo(cargas, df_veiculos, selecionados):
                 df_veiculos[df_veiculos["comprimento"] < COMPRIMENTO_MIN_GRANDE]["Veículo"]
             )
         ]
-        
+
+    # 🚨 SE O BLOQUEIO REMOVEU TODOS OS VEÍCULOS VIÁVEIS → FORÇA MULTI
+    if df_viaveis.empty:
+        resultado_multi, _ = calcular_multi_veiculos(cargas, df_testar)
+        return pd.DataFrame(resultado_multi), {"cenario": "MULTI"}
+    
     # --------------------------------
     # Ranqueamento por score
     # --------------------------------
