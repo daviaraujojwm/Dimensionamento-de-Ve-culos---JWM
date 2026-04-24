@@ -1133,20 +1133,24 @@ def executar_calculo(cargas, df_veiculos, selecionados):
         df_final = pd.DataFrame(resultado_multi)
         return df_final, {"cenario": "MULTI"}
 
-    # 🚫 BLOQUEIO DE CARRETA POR VOLUME MUITO BAIXO
-
-    VOLUME_MINIMO_CARRETA = 0.30  # 30%
+    # 🚫 BLOQUEIO DE VEÍCULOS GRANDES (CARRETAS) POR VOLUME BAIXO
     
-    capacidade_min_carreta = (
-        df_veiculos[df_veiculos["Veículo"].str.contains("Carreta")]
+    VOLUME_MINIMO_GRANDES = 0.30   # 30%
+    COMPRIMENTO_MIN_GRANDE = 11.0  # metros (define "carreta")
+    
+    # capacidade volumétrica mínima entre veículos grandes
+    capacidade_min_grande = (
+        df_veiculos[df_veiculos["comprimento"] >= COMPRIMENTO_MIN_GRANDE]
         ["Capacidade Volume (m³)"]
         .min()
     )
     
-    if volume_total < capacidade_min_carreta * VOLUME_MINIMO_CARRETA:
+    if volume_total < capacidade_min_grande * VOLUME_MINIMO_GRANDES:
         df_viaveis = df_viaveis[
-            ~df_viaveis["Veículo"].str.contains("Carreta")
-    ]
+            df_viaveis["Veículo"].isin(
+                df_veiculos[df_veiculos["comprimento"] < COMPRIMENTO_MIN_GRANDE]["Veículo"]
+            )
+        ]
         
     # --------------------------------
     # Ranqueamento por score
