@@ -931,11 +931,29 @@ def calcular_multi_veiculos(cargas, df_veiculos):
             "Peso Total (kg)": round(sum(c["peso"] for c in cargas_unit), 2)
         }], len(cargas_unit)
 
-    # 🚛 entra no multi fragmentado
-    veiculos_ordenados = df_veiculos.sort_values(
-        by="Capacidade Volume (m³)",
-        ascending=False
+    # 🚫 BLOQUEIO DE VEÍCULOS GRANDES NO MULTI (MESMA REGRA DO UNICO)
+    
+    VOLUME_MINIMO_GRANDES = 0.30
+    COMPRIMENTO_MIN_GRANDE = 11.0  # metros
+    
+    volume_total = sum(c["volume"] for c in cargas_unit)
+    
+    capacidade_min_grande = (
+        df_veiculos[df_veiculos["comprimento"] >= COMPRIMENTO_MIN_GRANDE]
+        ["Capacidade Volume (m³)"]
+        .min()
     )
+    
+    if volume_total < capacidade_min_grande * VOLUME_MINIMO_GRANDES:
+        veiculos_ordenados = df_veiculos[
+            df_veiculos["comprimento"] < COMPRIMENTO_MIN_GRANDE
+        ].sort_values(by="Capacidade Volume (m³)", ascending=False)
+    else:
+        veiculos_ordenados = df_veiculos.sort_values(
+            by="Capacidade Volume (m³)",
+            ascending=False
+        )
+
 
     resultado = []
     cargas_restantes = cargas_unit.copy()
