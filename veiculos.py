@@ -540,28 +540,29 @@ def excede_capacidade(
     return False
 
 def calcular_score(volume_usado, volume_max, peso_usado, peso_max):
-    """
-    Cálculo único e padronizado de score.
-    Deve ser usado em TODO o app.
-    Retorna score entre 0 e 100.
-    """
+
     if volume_max <= 0 or peso_max <= 0:
         return 0
 
-    aproveitamento_volume = min(100, (volume_usado / volume_max) * 100)
-    aproveitamento_peso = min(100, (peso_usado / peso_max) * 100)
+    aproveitamento_volume = (volume_usado / volume_max) * 100
+    aproveitamento_peso = (peso_usado / peso_max) * 100
+
+    # 🚫 BLOQUEIO DE VEÍCULO VAZIO
+    if aproveitamento_volume < 30:
+        return 0
+
+    aproveitamento_volume = min(100, aproveitamento_volume)
+    aproveitamento_peso = min(100, aproveitamento_peso)
 
     balanceamento = 100 - abs(aproveitamento_volume - aproveitamento_peso)
-    penalidade_excesso = max(0, aproveitamento_peso - 100) ** 1.5
 
     score = (
-        (aproveitamento_volume * 0.45) +
-        (aproveitamento_peso * 0.35) +
-        (balanceamento * 0.20)
-        - penalidade_excesso
+        (aproveitamento_volume * 0.55) +
+        (aproveitamento_peso * 0.30) +
+        (balanceamento * 0.15)
     )
 
-    return round(max(0, min(100, score)), 2)
+    return round(score, 2)
 
 def identificar_fator_limitante(
     volume_usado, volume_max,
@@ -945,27 +946,8 @@ def calcular_multi_veiculos(cargas, df_veiculos):
     # consolidação
     # loop de alocação
     # return resultado, total_alocado
-
-def escolher_veiculo_unico_completo(cargas_unit, df_veiculos):
-    volume_total = sum(c["volume"] for c in cargas_unit)
-    peso_total = sum(c["peso"] for c in cargas_unit)
-
-    veiculos_ordenados = df_veiculos.sort_values(
-        by="Capacidade Volume (m³)",
-        ascending=True
-    )
-
-    for _, veic in veiculos_ordenados.iterrows():
-        volume_max = veic["largura"] * veic["comprimento"] * veic["altura"]
-        peso_max = veic["peso_max"]
-
-        if volume_total <= volume_max and peso_total <= peso_max:
-            return veic
-
-    return None
-
-
     # alerta de cargas impossíveis
+
     if any(c["peso"] > df_veiculos["peso_max"].max() for c in cargas_restantes):
         st.warning("⚠ Existem cargas com peso maior que qualquer veículo disponível.")
 
@@ -1167,15 +1149,10 @@ def executar_calculo(cargas, df_veiculos, selecionados):
         aproveitamento_volume = (volume_total / row["Volume Máx"]) * 100
         aproveitamento_peso = (peso_total / row["Peso Máx"]) * 100
         
-        penalizado = aproveitamento_volume < 20 and aproveitamento_peso > 60
-        
-        if penalizado:
-            score *= 0.85
-        
         ranking.append({
             "Veículo": row["Veículo"],
             "Status": "Viável",
-            "Motivo": "⚠ Baixa eficiência volumétrica" if penalizado else "",
+            "Motivo": "",
             "Aproveitamento Volume (%)": round(aproveitamento_volume, 2),
             "Aproveitamento Peso (%)": round(aproveitamento_peso, 2),
             "Score": round(score, 2)
@@ -1183,35 +1160,29 @@ def executar_calculo(cargas, df_veiculos, selecionados):
                 
     df_rank = (
         pd.DataFrame(ranking)
-        .sort_values(by="Score", ascending=False)
+        .merge(
+            df_veiculos[["Veículo", "Capacidade Volume (m³)"]],
+            on="Veículo",
+            how="left"
+        )
+        .sort_values(
+            by=["Score", "Capacidade Volume (m³)"],
+            ascending=[False, True]  # ✅ Score maior, veículo menor
+        )
         .reset_index(drop=True)
+        .drop(columns=["Capacidade Volume (m³)"])
     )
     
-
-    # --------------------------------
-    # ✅ Simulação 3D decide o cenário
-    # --------------------------------
-    veiculo_principal = df_rank.iloc[0]["Veículo"]
-    info_veic = df_veiculos[df_veiculos["Veículo"] == veiculo_principal].iloc[0]
-
-    qtd_total_real = sum(c["Quantidade"] for c in cargas)
-
-    _, caixas_alocadas, _, _ = simular_empilhamento_3d(
-        expand_cargas_unitarias(cargas, MAX_CAIXAS_3D),
-        info_veic,
-        qtd_total_real
-    )
-
-    # --------------------------------
-    # ✅ CENÁRIO FINAL
-    # --------------------------------
-    if caixas_alocadas >= qtd_total_real:
+    # ✅ REGRA NOVA: decisão UNICO vs MULTI (SEM 3D)
+    
+    if not df_viaveis.empty:
+        # Existe pelo menos um veículo único viável
         return df_rank, {"cenario": "UNICO"}
-
+    
+    # ❌ Só chega aqui se NENHUM veículo único for viável
     resultado_multi, _ = calcular_multi_veiculos(cargas, df_testar)
-    df_final = pd.DataFrame(resultado_multi)
+    return pd.DataFrame(resultado_multi), {"cenario": "MULTI"}
 
-    return df_final, {"cenario": "MULTI"}
 # ============================
 # 🚀 BOTÃO CALCULAR
 # ============================
