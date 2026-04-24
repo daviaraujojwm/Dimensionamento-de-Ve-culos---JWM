@@ -888,19 +888,49 @@ def escolher_veiculo_menor_viavel(cargas_restantes, df_veiculos):
 
     return None
 
+def escolher_veiculo_unico_completo(cargas_unit, df_veiculos):
+    """
+    Retorna o MENOR veículo que comporta TODA a carga.
+    Se nenhum veículo único comportar tudo, retorna None.
+    """
+    volume_total = sum(c["volume"] for c in cargas_unit)
+    peso_total = sum(c["peso"] for c in cargas_unit)
+
+    veiculos_ordenados = df_veiculos.sort_values(
+        by="Capacidade Volume (m³)",
+        ascending=True  # ✅ menor primeiro
+    )
+
+    for _, veic in veiculos_ordenados.iterrows():
+        volume_max = veic["largura"] * veic["comprimento"] * veic["altura"]
+        peso_max = veic["peso_max"]
+
+        if volume_total <= volume_max and peso_total <= peso_max:
+            return veic
+
+    return None
 
 def calcular_multi_veiculos(cargas, df_veiculos):
 
     cargas_unit = expand_cargas_unitarias(cargas, limite=MAX_CAIXAS)
 
-    # ordenar cargas maiores primeiro
     cargas_unit = sorted(
         cargas_unit,
         key=lambda x: x["comp"] * x["larg"] * x["alt"],
         reverse=True
     )
 
-    # ordenar veículos (maior para menor)
+    # ✅ tenta resolver tudo com UM único veículo
+    veic_unico = escolher_veiculo_unico_completo(cargas_unit, df_veiculos)
+
+    if veic_unico is not None:
+        return [{
+            "Veículo": veic_unico["Veículo"],
+            "Qtd Caixas": len(cargas_unit),
+            "Peso Total (kg)": round(sum(c["peso"] for c in cargas_unit), 2)
+        }], len(cargas_unit)
+
+    # 🚛 entra no multi fragmentado
     veiculos_ordenados = df_veiculos.sort_values(
         by="Capacidade Volume (m³)",
         ascending=False
@@ -908,6 +938,32 @@ def calcular_multi_veiculos(cargas, df_veiculos):
 
     resultado = []
     cargas_restantes = cargas_unit.copy()
+
+    # ⬇️ DAQUI PRA BAIXO
+    # mantém TODO o seu código atual:
+    # while cargas_restantes:
+    # consolidação
+    # loop de alocação
+    # return resultado, total_alocado
+
+def escolher_veiculo_unico_completo(cargas_unit, df_veiculos):
+    volume_total = sum(c["volume"] for c in cargas_unit)
+    peso_total = sum(c["peso"] for c in cargas_unit)
+
+    veiculos_ordenados = df_veiculos.sort_values(
+        by="Capacidade Volume (m³)",
+        ascending=True
+    )
+
+    for _, veic in veiculos_ordenados.iterrows():
+        volume_max = veic["largura"] * veic["comprimento"] * veic["altura"]
+        peso_max = veic["peso_max"]
+
+        if volume_total <= volume_max and peso_total <= peso_max:
+            return veic
+
+    return None
+
 
     # alerta de cargas impossíveis
     if any(c["peso"] > df_veiculos["peso_max"].max() for c in cargas_restantes):
