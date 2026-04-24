@@ -921,8 +921,27 @@ def calcular_multi_veiculos(cargas, df_veiculos):
         reverse=True
     )
 
-    # ✅ tenta resolver tudo com UM único veículo
-    veic_unico = escolher_veiculo_unico_completo(cargas_unit, df_veiculos)
+    # 🚫 BLOQUEIO DE VEÍCULOS GRANDES NO MULTI (ANTES DE QUALQUER ESCOLHA)
+    VOLUME_MINIMO_GRANDES = 0.30
+    COMPRIMENTO_MIN_GRANDE = 11.0  # metros
+
+    volume_total = sum(c["volume"] for c in cargas_unit)
+
+    capacidade_min_grande = (
+        df_veiculos[df_veiculos["comprimento"] >= COMPRIMENTO_MIN_GRANDE]
+        ["Capacidade Volume (m³)"]
+        .min()
+    )
+
+    if volume_total < capacidade_min_grande * VOLUME_MINIMO_GRANDES:
+        df_multi = df_veiculos[
+            df_veiculos["comprimento"] < COMPRIMENTO_MIN_GRANDE
+        ]
+    else:
+        df_multi = df_veiculos
+
+    # ✅ só agora tenta UNICO dentro do MULTI
+    veic_unico = escolher_veiculo_unico_completo(cargas_unit, df_multi)
 
     if veic_unico is not None:
         return [{
@@ -931,33 +950,16 @@ def calcular_multi_veiculos(cargas, df_veiculos):
             "Peso Total (kg)": round(sum(c["peso"] for c in cargas_unit), 2)
         }], len(cargas_unit)
 
-    # 🚫 BLOQUEIO DE VEÍCULOS GRANDES NO MULTI (MESMA REGRA DO UNICO)
-    
-    VOLUME_MINIMO_GRANDES = 0.30
-    COMPRIMENTO_MIN_GRANDE = 11.0  # metros
-    
-    volume_total = sum(c["volume"] for c in cargas_unit)
-    
-    capacidade_min_grande = (
-        df_veiculos[df_veiculos["comprimento"] >= COMPRIMENTO_MIN_GRANDE]
-        ["Capacidade Volume (m³)"]
-        .min()
+    # 🚛 MULTI fragmentado respeitando bloqueio
+    veiculos_ordenados = df_multi.sort_values(
+        by="Capacidade Volume (m³)",
+        ascending=False
     )
-    
-    if volume_total < capacidade_min_grande * VOLUME_MINIMO_GRANDES:
-        veiculos_ordenados = df_veiculos[
-            df_veiculos["comprimento"] < COMPRIMENTO_MIN_GRANDE
-        ].sort_values(by="Capacidade Volume (m³)", ascending=False)
-    else:
-        veiculos_ordenados = df_veiculos.sort_values(
-            by="Capacidade Volume (m³)",
-            ascending=False
-        )
-
 
     resultado = []
     cargas_restantes = cargas_unit.copy()
 
+    # ... resto da função
     # ⬇️ DAQUI PRA BAIXO
     # mantém TODO o seu código atual:
     # while cargas_restantes:
