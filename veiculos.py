@@ -1133,6 +1133,21 @@ def executar_calculo(cargas, df_veiculos, selecionados):
         df_final = pd.DataFrame(resultado_multi)
         return df_final, {"cenario": "MULTI"}
 
+    # 🚫 BLOQUEIO DE CARRETA POR VOLUME MUITO BAIXO
+
+    VOLUME_MINIMO_CARRETA = 0.30  # 30%
+    
+    capacidade_min_carreta = (
+        df_veiculos[df_veiculos["Veículo"].str.contains("Carreta")]
+        ["Capacidade Volume (m³)"]
+        .min()
+    )
+    
+    if volume_total < capacidade_min_carreta * VOLUME_MINIMO_CARRETA:
+        df_viaveis = df_viaveis[
+            ~df_viaveis["Veículo"].str.contains("Carreta")
+    ]
+        
     # --------------------------------
     # Ranqueamento por score
     # --------------------------------
