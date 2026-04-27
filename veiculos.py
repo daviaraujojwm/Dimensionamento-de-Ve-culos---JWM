@@ -619,6 +619,21 @@ def gerar_justificativa_veiculo(
     return texto
 
 
+
+def buscar_veiculo_maior_por_peso(peso_total, df_veiculos):
+    """
+    Retorna o MENOR veículo que comporte o peso total,
+    escalando para carretas se necessário.
+    """
+    veiculos_ordenados = df_veiculos.sort_values("peso_max")
+
+    for _, veic in veiculos_ordenados.iterrows():
+        if peso_total <= veic["peso_max"]:
+            return veic
+
+    return None
+
+
 def reduzir_cargas_para_simulacao(cargas, limite):
     """
     Reduz o número de caixas para simulação 3D
@@ -1217,45 +1232,45 @@ def executar_calculo(cargas, df_veiculos, selecionados):
         .drop(columns=["Capacidade Volume (m³)"])
     )
     
-    # ✅ DECISÃO FINAL: UNICO vs MULTI (ORDEM CORRETA)
+    # ✅ DECISÃO FINAL: UNICO vs MULTI
     
-    PESO_LIMITE_UNICO = 30000      # kg
-    PERCENTUAL_MAXIMO = 0.85       # 85%
+    PERCENTUAL_MAXIMO = 0.85
     
-    if not df_viaveis.empty:
+    veiculo_topo = df_rank.iloc[0]["Veículo"]
+    info_veic = df_veiculos[
+        df_veiculos["Veículo"] == veiculo_topo
+    ].iloc[0]
     
-        veiculo_topo = df_rank.iloc[0]["Veículo"]
-        info_veic = df_veiculos[
-            df_veiculos["Veículo"] == veiculo_topo
-        ].iloc[0]
+    # 🚨 LIMITE PERCENTUAL → ESCALA PARA CARRETA
+    if peso_total > info_veic["peso_max"] * PERCENTUAL_MAXIMO:
     
-        # 🚨 LIMITE ABSOLUTO
-        if peso_total > PESO_LIMITE_UNICO:
-            resultado_multi, _ = calcular_multi_veiculos(cargas, df_testar)
-            return pd.DataFrame(resultado_multi), {"cenario": "MULTI"}
+        veic_maior = buscar_veiculo_maior_por_peso(peso_total, df_veiculos)
     
-        # 🚨 LIMITE PERCENTUAL
-        if peso_total > info_veic["peso_max"] * PERCENTUAL_MAXIMO:
-            resultado_multi, _ = calcular_multi_veiculos(cargas, df_testar)
-            return pd.DataFrame(resultado_multi), {"cenario": "MULTI"}
-    
-        # 🔎 FALLBACK: TODOS OS SCORES = 0
-        if (df_rank["Score"] <= 0).all():
-            df_fallback = (
-                df_rank
-                .merge(
-                    df_veiculos[["Veículo", "Capacidade Volume (m³)"]],
-                    on="Veículo",
-                    how="left"
-                )
-                .sort_values(by="Capacidade Volume (m³)", ascending=True)
-                .head(1)
-                .drop(columns=["Capacidade Volume (m³)"])
+        if veic_maior is not None:
+            volume_max = (
+                veic_maior["largura"]
+                * veic_maior["comprimento"]
+                * veic_maior["altura"]
             )
-            return df_fallback.reset_index(drop=True), {"cenario": "UNICO"}
     
-        # ✅ CASO NORMAL
-        return df_rank, {"cenario": "UNICO"}
+            df_escalado = pd.DataFrame([{
+                "Veículo": veic_maior["Veículo"],
+                "Status": "Viável",
+                "Motivo": "Escalonado por peso",
+                "Aproveitamento Volume (%)": round(
+                    (volume_total / volume_max) * 100, 2
+                ),
+                "Aproveitamento Peso (%)": round(
+                    (peso_total / veic_maior["peso_max"]) * 100, 2
+                ),
+                "Score": 999
+            }])
+    
+            return df_escalado, {"cenario": "UNICO"}
+    
+        # ❌ Só vira MULTI se nem carreta suportar
+        resultado_multi, _ = calcular_multi_veiculos(cargas, df_testar)
+        return pd.DataFrame(resultado_multi), {"cenario": "MULTI"}
     
     # ❌ NENHUM VEÍCULO ÚNICO VIÁVEL
     resultado_multi, _ = calcular_multi_veiculos(cargas, df_testar)
