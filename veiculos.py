@@ -1159,68 +1159,37 @@ def executar_calculo(cargas, df_veiculos, selecionados):
 
     df_status = pd.DataFrame(registros)
     df_viaveis = df_status[df_status["Status"] == "Viável"]
-
-    # ✅ Se nenhum veículo direto comportar,
-    # tenta escalonamento antes de MULTI
-    if df_viaveis.empty:
     
-        veic_maior = buscar_veiculo_maior_por_peso(peso_total, df_veiculos)
+    # ✅ PERFIL DE CARGA DE CARRETA (PRIORIDADE)
+    CAPACIDADE_BITRUCK = 18000
+    LIMIAR_CARRETA = 0.80
     
-        if veic_maior is not None:
-            volume_max = (
-                veic_maior["largura"]
-                * veic_maior["comprimento"]
-                * veic_maior["altura"]
-            )
+    if peso_total >= CAPACIDADE_BITRUCK * LIMIAR_CARRETA:
     
-            df_escalado = pd.DataFrame([{
-                "Veículo": veic_maior["Veículo"],
-                "Status": "Viável",
-                "Motivo": "Escalonado por peso",
-                "Aproveitamento Volume (%)": round(
-                    (volume_total / volume_max) * 100, 2
-                ),
-                "Aproveitamento Peso (%)": round(
-                    (peso_total / veic_maior["peso_max"]) * 100, 2
-                ),
-                "Score": 999
-            }])
+        veic_carreta = (
+            df_veiculos[df_veiculos["Veículo"].str.contains("Carreta")]
+            .sort_values("peso_max")
+            .iloc[0]
+        )
     
-            return df_escalado, {"cenario": "UNICO"}
+        volume_max = (
+            veic_carreta["largura"]
+            * veic_carreta["comprimento"]
+            * veic_carreta["altura"]
+        )
     
-        # ❌ Só vira MULTI se nem carreta suportar
-        resultado_multi, _ = calcular_multi_veiculos(cargas, df_testar)
-        return pd.DataFrame(resultado_multi), {"cenario": "MULTI"}
-
-    # 🚫 BLOQUEIO DE VEÍCULOS GRANDES (CARRETAS) POR VOLUME BAIXO
+        return pd.DataFrame([{
+            "Veículo": veic_carreta["Veículo"],
+            "Status": "Viável",
+            "Motivo": "Perfil de carga de carreta",
+            "Aproveitamento Volume (%)": round((volume_total / volume_max) * 100, 2),
+            "Aproveitamento Peso (%)": round((peso_total / veic_carreta["peso_max"]) * 100, 2),
+            "Score": 999
+        }]), {"cenario": "UNICO"}
     
-    VOLUME_MINIMO_GRANDES = 0.30   # 30%
-    COMPRIMENTO_MIN_GRANDE = 11.0  # metros (define "carreta")
-    
-    # capacidade volumétrica mínima entre veículos grandes
-    capacidade_min_grande = (
-        df_veiculos[df_veiculos["comprimento"] >= COMPRIMENTO_MIN_GRANDE]
-        ["Capacidade Volume (m³)"]
-        .min()
-    )
-    
-    if volume_total < capacidade_min_grande * VOLUME_MINIMO_GRANDES:
-        df_viaveis = df_viaveis[
-            df_viaveis["Veículo"].isin(
-                df_veiculos[df_veiculos["comprimento"] < COMPRIMENTO_MIN_GRANDE]["Veículo"]
-            )
-        ]
-
-    # 🚨 SE O BLOQUEIO REMOVEU TODOS OS VEÍCULOS VIÁVEIS → FORÇA MULTI
-    if df_viaveis.empty:
-        resultado_multi, _ = calcular_multi_veiculos(cargas, df_testar)
-        return pd.DataFrame(resultado_multi), {"cenario": "MULTI"}
-    
-    # --------------------------------
-    # Ranqueamento por score
-    # --------------------------------
+    # ✅ CASO NÃO SEJA CARRETA → RANKING NORMAL
     ranking = []
-
+    
     for _, row in df_viaveis.iterrows():
         score = calcular_score(
             volume_total,
@@ -1228,19 +1197,16 @@ def executar_calculo(cargas, df_veiculos, selecionados):
             peso_total,
             row["Peso Máx"]
         )
-   
-        aproveitamento_volume = (volume_total / row["Volume Máx"]) * 100
-        aproveitamento_peso = (peso_total / row["Peso Máx"]) * 100
-        
+    
         ranking.append({
             "Veículo": row["Veículo"],
             "Status": "Viável",
             "Motivo": "",
-            "Aproveitamento Volume (%)": round(aproveitamento_volume, 2),
-            "Aproveitamento Peso (%)": round(aproveitamento_peso, 2),
-            "Score": round(score, 2)
+            "Aproveitamento Volume (%)": round((volume_total / row["Volume Máx"]) * 100, 2),
+            "Aproveitamento Peso (%)": round((peso_total / row["Peso Máx"]) * 100, 2),
+            "Score": score
         })
-                
+    
     df_rank = (
         pd.DataFrame(ranking)
         .merge(
@@ -1250,53 +1216,12 @@ def executar_calculo(cargas, df_veiculos, selecionados):
         )
         .sort_values(
             by=["Score", "Capacidade Volume (m³)"],
-            ascending=[False, True]  # ✅ Score maior, veículo menor
+            ascending=[False, True]
         )
-        .reset_index(drop=True)
         .drop(columns=["Capacidade Volume (m³)"])
+        .reset_index(drop=True)
     )
-
-    # ✅ DECISÃO FINAL: UNICO vs MULTI
     
-    PERCENTUAL_MAXIMO = 0.85
-    
-    veiculo_topo = df_rank.iloc[0]["Veículo"]
-    info_veic = df_veiculos[
-        df_veiculos["Veículo"] == veiculo_topo
-    ].iloc[0]
-    
-    # 🚨 LIMITE PERCENTUAL → ESCALA PARA CARRETA
-    if peso_total > info_veic["peso_max"] * PERCENTUAL_MAXIMO:
-    
-        veic_maior = buscar_veiculo_maior_por_peso(peso_total, df_veiculos)
-    
-        if veic_maior is not None:
-            volume_max = (
-                veic_maior["largura"]
-                * veic_maior["comprimento"]
-                * veic_maior["altura"]
-            )
-    
-            df_escalado = pd.DataFrame([{
-                "Veículo": veic_maior["Veículo"],
-                "Status": "Viável",
-                "Motivo": "Escalonado por peso",
-                "Aproveitamento Volume (%)": round(
-                    (volume_total / volume_max) * 100, 2
-                ),
-                "Aproveitamento Peso (%)": round(
-                    (peso_total / veic_maior["peso_max"]) * 100, 2
-                ),
-                "Score": 999
-            }])
-    
-            return df_escalado, {"cenario": "UNICO"}
-    
-        # ❌ Só vira MULTI se nem carreta suportar
-        resultado_multi, _ = calcular_multi_veiculos(cargas, df_testar)
-        return pd.DataFrame(resultado_multi), {"cenario": "MULTI"}
-    
-    # ✅ CASO NORMAL → UNICO
     return df_rank, {"cenario": "UNICO"}
 
 # ============================
