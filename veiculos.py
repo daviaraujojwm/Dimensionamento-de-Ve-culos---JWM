@@ -1231,7 +1231,7 @@ def executar_calculo(cargas, df_veiculos, selecionados):
         .reset_index(drop=True)
         .drop(columns=["Capacidade Volume (m³)"])
     )
-    
+
     # ✅ DECISÃO FINAL: UNICO vs MULTI
     
     PERCENTUAL_MAXIMO = 0.85
@@ -1272,9 +1272,8 @@ def executar_calculo(cargas, df_veiculos, selecionados):
         resultado_multi, _ = calcular_multi_veiculos(cargas, df_testar)
         return pd.DataFrame(resultado_multi), {"cenario": "MULTI"}
     
-    # ❌ NENHUM VEÍCULO ÚNICO VIÁVEL
-    resultado_multi, _ = calcular_multi_veiculos(cargas, df_testar)
-    return pd.DataFrame(resultado_multi), {"cenario": "MULTI"}
+    # ✅ CASO NORMAL → UNICO
+    return df_rank, {"cenario": "UNICO"}
 
 # ============================
 # 🚀 BOTÃO CALCULAR
