@@ -1160,13 +1160,37 @@ def executar_calculo(cargas, df_veiculos, selecionados):
     df_status = pd.DataFrame(registros)
     df_viaveis = df_status[df_status["Status"] == "Viável"]
 
-    # --------------------------------
-    # ❌ Nenhum veículo único → MULTI
-    # --------------------------------
+    # ✅ Se nenhum veículo direto comportar,
+    # tenta escalonamento antes de MULTI
     if df_viaveis.empty:
+    
+        veic_maior = buscar_veiculo_maior_por_peso(peso_total, df_veiculos)
+    
+        if veic_maior is not None:
+            volume_max = (
+                veic_maior["largura"]
+                * veic_maior["comprimento"]
+                * veic_maior["altura"]
+            )
+    
+            df_escalado = pd.DataFrame([{
+                "Veículo": veic_maior["Veículo"],
+                "Status": "Viável",
+                "Motivo": "Escalonado por peso",
+                "Aproveitamento Volume (%)": round(
+                    (volume_total / volume_max) * 100, 2
+                ),
+                "Aproveitamento Peso (%)": round(
+                    (peso_total / veic_maior["peso_max"]) * 100, 2
+                ),
+                "Score": 999
+            }])
+    
+            return df_escalado, {"cenario": "UNICO"}
+    
+        # ❌ Só vira MULTI se nem carreta suportar
         resultado_multi, _ = calcular_multi_veiculos(cargas, df_testar)
-        df_final = pd.DataFrame(resultado_multi)
-        return df_final, {"cenario": "MULTI"}
+        return pd.DataFrame(resultado_multi), {"cenario": "MULTI"}
 
     # 🚫 BLOQUEIO DE VEÍCULOS GRANDES (CARRETAS) POR VOLUME BAIXO
     
