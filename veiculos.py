@@ -1135,20 +1135,40 @@ def executar_calculo(cargas, df_veiculos, selecionados):
     # --------------------------------
     registros = []
 
+    # 🔒 Dimensões máximas unitárias da carga
+    max_comp = max(c["Comprimento (m)"] for c in cargas)
+    max_larg = max(c["Largura (m)"] for c in cargas)
+    max_alt  = max(c["Altura (m)"] for c in cargas)
+
     for _, veic in df_testar.iterrows():
         volume_max = veic["largura"] * veic["comprimento"] * veic["altura"]
         peso_max = veic["peso_max"]
-
+    
         status = "Viável"
         motivo = ""
-
-        if volume_total > volume_max:
+    
+        # 🚫 REGRAS FÍSICAS ELIMINATÓRIAS (DIMENSÕES)
+        if max_larg > veic["largura"]:
             status = "Inviável"
-            motivo = "Excede volume"
+            motivo = "Largura da carga excede o veículo"
+        
+        elif max_comp > veic["comprimento"]:
+            status = "Inviável"
+            motivo = "Comprimento da carga excede o veículo"
+        
+        elif max_alt > veic["altura"]:
+            status = "Inviável"
+            motivo = "Altura da carga excede o veículo"
+    
+        # 🚫 REGRAS OPERACIONAIS (PESO / VOLUME)
         elif peso_total > peso_max:
             status = "Inviável"
             motivo = "Excede peso"
-
+    
+        elif volume_total > volume_max:
+            status = "Inviável"
+            motivo = "Excede volume"
+    
         registros.append({
             "Veículo": veic["Veículo"],
             "Status": status,
