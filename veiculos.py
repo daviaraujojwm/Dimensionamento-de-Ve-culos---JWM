@@ -16,8 +16,8 @@ MAX_GRID = 10000
 
 st.markdown("""
 <style>
-
 /* ============================
+
    FUNDO
 ============================ */
 .stApp {
@@ -906,22 +906,38 @@ def escolher_veiculo_menor_viavel(cargas_restantes, df_veiculos):
 
 def escolher_veiculo_unico_completo(cargas_unit, df_veiculos):
     """
-    Retorna o MENOR veículo que comporta TODA a carga.
-    Se nenhum veículo único comportar tudo, retorna None.
+    Retorna o MENOR veículo que comporta TODA a carga
+    respeitando peso, volume E dimensões físicas unitárias.
     """
+
+    # Totais
     volume_total = sum(c["volume"] for c in cargas_unit)
     peso_total = sum(c["peso"] for c in cargas_unit)
 
+    # 🔒 Dimensões máximas unitárias da carga
+    max_comp = max(c["comp"] for c in cargas_unit)
+    max_larg = max(c["larg"] for c in cargas_unit)
+    max_alt  = max(c["alt"] for c in cargas_unit)
+
+    # Menor veículo primeiro
     veiculos_ordenados = df_veiculos.sort_values(
         by="Capacidade Volume (m³)",
-        ascending=True  # ✅ menor primeiro
+        ascending=True
     )
 
     for _, veic in veiculos_ordenados.iterrows():
+
         volume_max = veic["largura"] * veic["comprimento"] * veic["altura"]
         peso_max = veic["peso_max"]
 
-        if volume_total <= volume_max and peso_total <= peso_max:
+        # ✅ HARD RULES COMPLETAS
+        if (
+            volume_total <= volume_max
+            and peso_total <= peso_max
+            and max_larg <= veic["largura"]
+            and max_comp <= veic["comprimento"]
+            and max_alt <= veic["altura"]
+        ):
             return veic
 
     return None
