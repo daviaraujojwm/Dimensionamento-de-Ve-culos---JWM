@@ -1227,6 +1227,8 @@ def executar_calculo(cargas, df_veiculos, selecionados):
     ranking = []
     
     for _, row in df_viaveis.iterrows():
+    
+        # score base
         score = calcular_score(
             volume_total,
             row["Volume Máx"],
@@ -1234,13 +1236,38 @@ def executar_calculo(cargas, df_veiculos, selecionados):
             row["Peso Máx"]
         )
     
+        # ===============================
+        # NOVO DESEMPATE OPERACIONAL
+        # ===============================
+        tipo = row["Veículo"].lower()
+    
+        bonus_operacional = 0
+    
+        # cargas longas / industriais
+        if "aberto" in tipo:
+            bonus_operacional += 2
+    
+        # proteção climática
+        elif "baú" in tipo:
+            bonus_operacional += 1.5
+    
+        # acesso lateral
+        elif "sider" in tipo:
+            bonus_operacional += 1
+    
+        score_final = score + bonus_operacional
+    
         ranking.append({
             "Veículo": row["Veículo"],
             "Status": "Viável",
             "Motivo": "",
-            "Aproveitamento Volume (%)": round((volume_total / row["Volume Máx"]) * 100, 2),
-            "Aproveitamento Peso (%)": round((peso_total / row["Peso Máx"]) * 100, 2),
-            "Score": score
+            "Aproveitamento Volume (%)": round(
+                (volume_total / row["Volume Máx"]) * 100, 2
+            ),
+            "Aproveitamento Peso (%)": round(
+                (peso_total / row["Peso Máx"]) * 100, 2
+            ),
+            "Score": round(score_final, 2)
         })
     
     df_rank = (
