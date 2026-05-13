@@ -1301,9 +1301,12 @@ def executar_calculo(cargas, df_veiculos, selecionados):
     
     # 🔥 se a carga não cabe no menor veículo → tenta MULTI
     if valor_total > capacidade_menor:
+    
         multi_resultado, total_alocado = calcular_multi_veiculos(cargas, df_veiculos)
     
-        return pd.DataFrame(multi_resultado), {"cenario": "MULTI"}
+        # ✅ SE MULTI CONSEGUIU ALOCAR → USA MULTI
+        if multi_resultado and total_alocado > 0:
+            return pd.DataFrame(multi_resultado), {"cenario": "MULTI"}
     
     # ✅ se cabe → usa menor veículo único
     if veic_unico is not None:
