@@ -1295,7 +1295,17 @@ def executar_calculo(cargas, df_veiculos, selecionados):
         df_veiculos
     )
     
-    # ✅ NOVO: usa sempre o menor veículo que comporta tudo
+    # ✅ NOVO: decidir entre MULTI ou UNICO
+    
+    capacidade_menor = df_veiculos["Capacidade Volume (m³)"].min()
+    
+    # 🔥 se a carga não cabe no menor veículo → tenta MULTI
+    if valor_total > capacidade_menor:
+        multi_resultado, total_alocado = calcular_multi_veiculos(cargas, df_veiculos)
+    
+        return pd.DataFrame(multi_resultado), {"cenario": "MULTI"}
+    
+    # ✅ se cabe → usa menor veículo único
     if veic_unico is not None:
     
         veic_info = veic_unico
@@ -1317,6 +1327,7 @@ def executar_calculo(cargas, df_veiculos, selecionados):
             "Aproveitamento Peso (%)": round((peso_total / veic_info["peso_max"]) * 100, 2),
             "Score": 100
         }]), {"cenario": "UNICO"}
+
     
     # ✅ CASO NÃO SEJA CARRETA → RANKING NORMAL
     ranking = []
