@@ -561,16 +561,25 @@ def calcular_score(volume_usado, volume_max, peso_usado, peso_max):
     aproveitamento_volume = (volume_usado / volume_max) * 100
     aproveitamento_peso = (peso_usado / peso_max) * 100
 
-    # 🚫 BLOQUEIO DE VEÍCULO VAZIO
-    # ✅ penaliza, mas NÃO zera
+    aproveitamento_volume = min(100, aproveitamento_volume)
+    aproveitamento_peso = min(100, aproveitamento_peso)
+
+    # ✅ CALCULA ANTES
+    balanceamento = 100 - abs(aproveitamento_volume - aproveitamento_peso)
+
+    # ✅ score base
+    score = (
+        (aproveitamento_volume * 0.55) +
+        (aproveitamento_peso * 0.30) +
+        (balanceamento * 0.15)
+    )
+
+    # ✅ NOVA REGRA (sem quebrar)
     if aproveitamento_volume < 30:
         penalidade = (30 - aproveitamento_volume) * 0.8
-        score = (
-            (aproveitamento_volume * 0.55) +
-            (aproveitamento_peso * 0.30) +
-            (balanceamento * 0.15)
-        ) - penalidade
-        return round(score, 2)
+        score -= penalidade
+
+    return round(score, 2)
 
     aproveitamento_volume = min(100, aproveitamento_volume)
     aproveitamento_peso = min(100, aproveitamento_peso)
