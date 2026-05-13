@@ -879,11 +879,14 @@ def simular_empilhamento_3d(
 # ✅ FUNÇÃO PARA COMPLEMENTO RESIDUAL
 # ==========================================
 def escolher_veiculo_menor_viavel(cargas_restantes, df_veiculos):
+
     volume_restante = sum(c["volume"] for c in cargas_restantes)
     peso_restante = sum(c["peso"] for c in cargas_restantes)
 
-    # ✅ maior altura entre as caixas restantes
-    altura_minima = max(c["alt"] for c in cargas_restantes)
+    # 🔒 Dimensões máximas unitárias
+    max_comp = max(c["comp"] for c in cargas_restantes)
+    max_larg = max(c["larg"] for c in cargas_restantes)
+    max_alt  = max(c["alt"] for c in cargas_restantes)
 
     veiculos_ordenados = df_veiculos.sort_values(
         by="Capacidade Volume (m³)",
@@ -891,18 +894,22 @@ def escolher_veiculo_menor_viavel(cargas_restantes, df_veiculos):
     )
 
     for _, veic in veiculos_ordenados.iterrows():
+
         volume_max = veic["comprimento"] * veic["largura"] * veic["altura"]
         peso_max = veic["peso_max"]
 
-        # ✅ valida peso + volume + ALTURA
+        # ✅ HARD RULE COMPLETA
         if (
             volume_restante <= volume_max
             and peso_restante <= peso_max
-            and altura_minima <= veic["altura"]
+            and max_alt <= veic["altura"]
+            and max_larg <= veic["largura"]
+            and max_comp <= veic["comprimento"]
         ):
             return veic
 
     return None
+
 
 def escolher_veiculo_unico_completo(cargas_unit, df_veiculos):
     """
@@ -1196,11 +1203,29 @@ def executar_calculo(cargas, df_veiculos, selecionados):
     df_status = pd.DataFrame(registros)
     df_viaveis = df_status[df_status["Status"] == "Viável"]
     
-    # ✅ PERFIL DE CARGA DE CARRETA (PRIORIDADE)
+    # ✅ se nenhum veículo viável → MULTI PRIMEIRO
+    if df_viaveis.empty:
+        multi_resultado, total_alocado = calcular_multi_veiculos(
+            cargas,
+            df_veiculos
+        )
+        return pd.DataFrame(multi_resultado), {"cenario": "MULTI"}
+    
+    
+    # ✅ PERFIL DE CARGA DE CARRETA (DEPOIS DA VIABILIDADE)
     CAPACIDADE_BITRUCK = 18000
     LIMIAR_CARRETA = 0.80
     
-    if peso_total >= CAPACIDADE_BITRUCK * LIMIAR_CARRETA:
+    volume_bitruck = (
+        df_veiculos[df_veiculos["Veículo"] == "Bi-Truck Baú"]
+        ["Capacidade Volume (m³)"]
+        .iloc[0]
+    )
+    
+    if (
+        peso_total >= CAPACIDADE_BITRUCK * LIMIAR_CARRETA
+        or volume_total >= volume_bitruck * LIMIAR_CARRETA
+    ):
     
         veic_carreta = (
             df_veiculos[df_veiculos["Veículo"].str.contains("Carreta")]
@@ -1222,6 +1247,9 @@ def executar_calculo(cargas, df_veiculos, selecionados):
             "Aproveitamento Peso (%)": round((peso_total / veic_carreta["peso_max"]) * 100, 2),
             "Score": 999
         }]), {"cenario": "UNICO"}
+
+
+
     
     # ✅ CASO NÃO SEJA CARRETA → RANKING NORMAL
     ranking = []
@@ -1284,6 +1312,12 @@ def executar_calculo(cargas, df_veiculos, selecionados):
         .drop(columns=["Capacidade Volume (m³)"])
         .reset_index(drop=True)
     )
+    
+    # ✅ se nenhum veículo for viável → usar MULTI
+    if df_viaveis.empty:
+        multi_resultado, total_alocado = calcular_multi_veiculos(cargas, df_veiculos)
+    
+        return pd.DataFrame(multi_resultado), {"cenario": "MULTI"}
     
     return df_rank, {"cenario": "UNICO"}
 
