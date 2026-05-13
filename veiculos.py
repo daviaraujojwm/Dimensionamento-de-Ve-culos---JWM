@@ -1325,7 +1325,13 @@ def executar_calculo(cargas, df_veiculos, selecionados):
             peso_total,
             row["Peso Máx"]
         )
-    
+        
+        # ✅ NOVO: penalização por veículo grande (ESSENCIAL)
+        volume_veiculo = veic_info["Capacidade Volume (m³)"]
+        
+        if valor_total < volume_veiculo * 0.4:
+            score -= 25
+        
         # ===============================
         # DESEMPATE OPERACIONAL
         # ===============================
