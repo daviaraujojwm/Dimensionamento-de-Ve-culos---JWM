@@ -1295,25 +1295,27 @@ def executar_calculo(cargas, df_veiculos, selecionados):
         df_veiculos
     )
     
-    # ==========================================
-    # ✅ 3. SE FOR CARRETA → PRIORIDADE TOTAL (TESTE 7)
-    # ==========================================
+    # ✅ NOVO: usa sempre o menor veículo que comporta tudo
+    if veic_unico is not None:
     
-    if veic_unico is not None and "Carreta" in veic_unico["Veículo"]:
+        veic_info = veic_unico
     
-        volume_max = (
-            veic_unico["largura"]
-            * veic_unico["comprimento"]
-            * veic_unico["altura"]
-        )
+        if empilhavel:
+            capacidade_max = (
+                veic_info["largura"] * veic_info["comprimento"] * veic_info["altura"]
+            )
+        else:
+            capacidade_max = (
+                veic_info["largura"] * veic_info["comprimento"]
+            )
     
         return pd.DataFrame([{
-            "Veículo": veic_unico["Veículo"],
+            "Veículo": veic_info["Veículo"],
             "Status": "Viável",
-            "Motivo": "Perfil de carga de carreta",
-            "Aproveitamento (%)": round((valor_total / volume_max) * 100, 2),
-            "Aproveitamento Peso (%)": round((peso_total / veic_unico["peso_max"]) * 100, 2),
-            "Score": 999
+            "Motivo": "Menor veículo que comporta toda a carga",
+            "Aproveitamento (%)": round((valor_total / capacidade_max) * 100, 2),
+            "Aproveitamento Peso (%)": round((peso_total / veic_info["peso_max"]) * 100, 2),
+            "Score": 100
         }]), {"cenario": "UNICO"}
     
     # ✅ CASO NÃO SEJA CARRETA → RANKING NORMAL
