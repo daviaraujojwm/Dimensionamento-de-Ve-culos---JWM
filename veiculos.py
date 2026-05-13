@@ -150,7 +150,7 @@ if "df_result" not in st.session_state or not isinstance(st.session_state.df_res
         "Veículo",
         "Status",
         "Motivo",
-        "Aproveitamento Volume (%)",
+        "Aproveitamento (%)",
         "Aproveitamento Peso (%)",
         "Score"
     ])
@@ -340,7 +340,18 @@ if qtd > 1000:
 
 pode_adicionar = len(erros) == 0
 
-#ADICIONAR CARGA
+# ========================================
+# ✅ TOGGLE DE EMPILHAMENTO (FORA DO BOTÃO)
+# ========================================
+
+empilhavel = st.toggle(
+    "📦 Permitir empilhamento (cálculo 3D)",
+    value=True
+)
+
+# ========================================
+# ✅ BOTÃO DE ADICIONAR CARGA
+# ========================================
 
 if st.button("➕ Adicionar carga", disabled=not pode_adicionar):
     st.session_state.cargas.append({
@@ -499,10 +510,9 @@ def expand_cargas_unitarias(cargas, limite=MAX_CAIXAS):
 
     return lista
 
-def calcular_totais(cargas):
-    """
-    Calcula volume e peso total de forma consistente.
-    """
+def calcular_totais(cargas, empilhavel=True):
+
+    area = 0
     volume = 0
     peso = 0
 
@@ -514,10 +524,14 @@ def calcular_totais(cargas):
         alt = float(c["Altura (m)"])
         peso_unit = float(c["Peso unitário (kg)"])
 
+        area += comp * larg * qtd
         volume += comp * larg * alt * qtd
         peso += peso_unit * qtd
 
-    return volume, peso
+    if empilhavel:
+        return volume, peso
+    else:
+        return area, peso
 
 def excede_capacidade(
     peso_atual,
@@ -584,7 +598,7 @@ def identificar_fator_limitante(
 
 def gerar_justificativa_veiculo(
     veiculo,
-    volume_total,
+    valor_total,
     peso_total,
     volume_max,
     peso_max,
@@ -592,14 +606,14 @@ def gerar_justificativa_veiculo(
     caixas_alocadas,
     qtd_total_real
 ):
-    aproveitamento_volume = (volume_total / volume_max) * 100
+    aproveitamento_volume = (valor_total / volume_max) * 100
     aproveitamento_peso = (peso_total / peso_max) * 100
     equilibrio = 100 - abs(aproveitamento_volume - aproveitamento_peso)
 
     texto = (
         f"O veículo **{veiculo}** foi selecionado por apresentar o melhor "
         f"equilíbrio técnico entre volume e peso.\n\n"
-        f"• Ocupação volumétrica: {aproveitamento_volume:.1f}%\n"
+        f"• Ocupação da capacidade: {aproveitamento_volume:.1f}%\n"
         f"• Utilização de peso: {aproveitamento_peso:.1f}%\n"
         f"• Índice de equilíbrio: {equilibrio:.1f}%\n"
         f"• Score técnico final: {score:.1f}\n\n"
@@ -918,7 +932,10 @@ def escolher_veiculo_unico_completo(cargas_unit, df_veiculos):
     """
 
     # Totais
-    volume_total = sum(c["volume"] for c in cargas_unit)
+    if empilhavel:
+        valor_total = sum(c["volume"] for c in cargas_unit)
+    else:
+        valor_total = sum(c["comp"] * c["larg"] for c in cargas_unit)
     peso_total = sum(c["peso"] for c in cargas_unit)
 
     # 🔒 Dimensões máximas unitárias da carga
@@ -933,21 +950,25 @@ def escolher_veiculo_unico_completo(cargas_unit, df_veiculos):
     )
 
     for _, veic in veiculos_ordenados.iterrows():
-
-        volume_max = veic["largura"] * veic["comprimento"] * veic["altura"]
+    
+        if empilhavel:
+            capacidade_max = veic["largura"] * veic["comprimento"] * veic["altura"]
+        else:
+            capacidade_max = veic["largura"] * veic["comprimento"]
+    
         peso_max = veic["peso_max"]
-
-        # ✅ HARD RULES COMPLETAS
+    
         if (
-            volume_total <= volume_max
+            valor_total <= capacidade_max
             and peso_total <= peso_max
             and max_larg <= veic["largura"]
             and max_comp <= veic["comprimento"]
             and max_alt <= veic["altura"]
         ):
             return veic
-
+    
     return None
+
 
 def calcular_multi_veiculos(cargas, df_veiculos):
 
@@ -963,7 +984,11 @@ def calcular_multi_veiculos(cargas, df_veiculos):
     VOLUME_MINIMO_GRANDES = 0.30
     COMPRIMENTO_MIN_GRANDE = 11.0  # metros
 
-    volume_total = sum(c["volume"] for c in cargas_unit)
+    if empilhavel:
+        valor_total = sum(c["volume"] for c in cargas_unit)
+    else:
+        valor_total = sum(c["comp"] * c["larg"] for c in cargas_unit)
+
 
     capacidade_min_grande = (
         df_veiculos[df_veiculos["comprimento"] >= COMPRIMENTO_MIN_GRANDE]
@@ -971,7 +996,7 @@ def calcular_multi_veiculos(cargas, df_veiculos):
         .min()
     )
 
-    if volume_total < capacidade_min_grande * VOLUME_MINIMO_GRANDES:
+    if valor_total < capacidade_min_grande * VOLUME_MINIMO_GRANDES:
         df_multi = df_veiculos[
             df_veiculos["comprimento"] < COMPRIMENTO_MIN_GRANDE
         ]
@@ -1083,20 +1108,25 @@ def calcular_multi_veiculos(cargas, df_veiculos):
             novas_restantes = []
 
             for carga in cargas_restantes:
-
-                volume_carga = carga["volume"]
-
+            
+                if empilhavel:
+                    valor_carga = carga["volume"]
+                    capacidade_veic = comp_v * larg_v * alt_v
+                else:
+                    valor_carga = carga["comp"] * carga["larg"]
+                    capacidade_veic = comp_v * larg_v
+            
                 if excede_capacidade(
                     peso_total,
                     volume_ocupado,
                     carga["peso"],
-                    volume_carga,
+                    valor_carga,
                     peso_max,
-                    comp_v * larg_v * alt_v
+                    capacidade_veic
                 ):
                     novas_restantes.append(carga)
                     continue
-
+                    
                 cabe = cabe_no_piso_heuristica(
                     alocadas + [carga],
                     comp_v,
@@ -1107,7 +1137,7 @@ def calcular_multi_veiculos(cargas, df_veiculos):
                 if cabe:
                     alocadas.append(carga)
                     peso_total += carga["peso"]
-                    volume_ocupado += volume_carga
+                    volume_ocupado += valor_carga
                     alocou_algum = True
                 else:
                     novas_restantes.append(carga)
@@ -1151,8 +1181,8 @@ def executar_calculo(cargas, df_veiculos, selecionados):
     # --------------------------------
     # Totais da carga
     # --------------------------------
-    volume_total, peso_total = calcular_totais(cargas)
-
+    valor_total, peso_total = calcular_totais(cargas, empilhavel)
+    
     # --------------------------------
     # Viabilidade básica (peso + volume)
     # --------------------------------
@@ -1183,15 +1213,23 @@ def executar_calculo(cargas, df_veiculos, selecionados):
             status = "Inviável"
             motivo = "Altura da carga excede o veículo"
     
-        # 🚫 REGRAS OPERACIONAIS (PESO / VOLUME)
-        elif peso_total > peso_max:
-            status = "Inviável"
-            motivo = "Excede peso"
-    
-        elif volume_total > volume_max:
-            status = "Inviável"
-            motivo = "Excede volume"
-    
+        # 🚫 REGRAS OPERACIONAIS (PESO / CAPACIDADE)
+        
+        if empilhavel:
+            capacidade_max = veic["largura"] * veic["comprimento"] * veic["altura"]
+        else:
+            capacidade_max = veic["largura"] * veic["comprimento"]
+        
+        if status == "Viável":
+        
+            if peso_total > peso_max:
+                status = "Inviável"
+                motivo = "Excede peso"
+        
+            elif valor_total > capacidade_max:
+                status = "Inviável"
+                motivo = "Excede capacidade"
+        
         registros.append({
             "Veículo": veic["Veículo"],
             "Status": status,
@@ -1203,83 +1241,102 @@ def executar_calculo(cargas, df_veiculos, selecionados):
     df_status = pd.DataFrame(registros)
     df_viaveis = df_status[df_status["Status"] == "Viável"]
     
-    # ✅ se nenhum veículo viável → MULTI PRIMEIRO
-    if df_viaveis.empty:
-        multi_resultado, total_alocado = calcular_multi_veiculos(
-            cargas,
-            df_veiculos
-        )
-        return pd.DataFrame(multi_resultado), {"cenario": "MULTI"}
+    # ==========================================
+    # ✅ 1. BLOQUEIO DE CARGA IMPOSSÍVEL (TESTE 8)
+    # ==========================================
     
+    max_comp_global = max(c["Comprimento (m)"] for c in cargas)
+    max_larg_global = max(c["Largura (m)"] for c in cargas)
+    max_alt_global  = max(c["Altura (m)"] for c in cargas)
     
-    # ✅ PERFIL DE CARGA DE CARRETA (DEPOIS DA VIABILIDADE)
-    CAPACIDADE_BITRUCK = 18000
-    LIMIAR_CARRETA = 0.80
-    
-    volume_bitruck = (
-        df_veiculos[df_veiculos["Veículo"] == "Bi-Truck Baú"]
-        ["Capacidade Volume (m³)"]
-        .iloc[0]
-    )
+    max_comp_veic = df_veiculos["comprimento"].max()
+    max_larg_veic = df_veiculos["largura"].max()
+    max_alt_veic  = df_veiculos["altura"].max()
     
     if (
-        peso_total >= CAPACIDADE_BITRUCK * LIMIAR_CARRETA
-        or volume_total >= volume_bitruck * LIMIAR_CARRETA
+        max_comp_global > max_comp_veic
+        or max_larg_global > max_larg_veic
+        or max_alt_global > max_alt_veic
     ):
+        return pd.DataFrame([{
+            "Veículo": "Nenhum",
+            "Status": "Inviável",
+            "Motivo": "Carga excede dimensões máximas de todos os veículos",
+            "Aproveitamento (%)": 0,
+            "Aproveitamento Peso (%)": 0,
+            "Score": 0
+        }]), {"cenario": None}
     
-        veic_carreta = (
-            df_veiculos[df_veiculos["Veículo"].str.contains("Carreta")]
-            .sort_values("peso_max")
-            .iloc[0]
-        )
+    
+    # ==========================================
+    # ✅ 2. VERIFICA VEÍCULO ÚNICO REAL
+    # ==========================================
+    
+    cargas_unit = expand_cargas_unitarias(cargas)
+    
+    veic_unico = escolher_veiculo_unico_completo(
+        cargas_unit,
+        df_veiculos
+    )
+    
+    # ==========================================
+    # ✅ 3. SE FOR CARRETA → PRIORIDADE TOTAL (TESTE 7)
+    # ==========================================
+    
+    if veic_unico is not None and "Carreta" in veic_unico["Veículo"]:
     
         volume_max = (
-            veic_carreta["largura"]
-            * veic_carreta["comprimento"]
-            * veic_carreta["altura"]
+            veic_unico["largura"]
+            * veic_unico["comprimento"]
+            * veic_unico["altura"]
         )
     
         return pd.DataFrame([{
-            "Veículo": veic_carreta["Veículo"],
+            "Veículo": veic_unico["Veículo"],
             "Status": "Viável",
             "Motivo": "Perfil de carga de carreta",
-            "Aproveitamento Volume (%)": round((volume_total / volume_max) * 100, 2),
-            "Aproveitamento Peso (%)": round((peso_total / veic_carreta["peso_max"]) * 100, 2),
+            "Aproveitamento (%)": round((valor_total / volume_max) * 100, 2),
+            "Aproveitamento Peso (%)": round((peso_total / veic_unico["peso_max"]) * 100, 2),
             "Score": 999
         }]), {"cenario": "UNICO"}
-
-
-
     
     # ✅ CASO NÃO SEJA CARRETA → RANKING NORMAL
     ranking = []
     
     for _, row in df_viaveis.iterrows():
     
-        # score base
+        # 🔧 pega dados do veículo
+        veic_info = df_veiculos[df_veiculos["Veículo"] == row["Veículo"]].iloc[0]
+    
+        # ✅ capacidade depende do modo
+        if empilhavel:
+            capacidade_max = (
+                veic_info["largura"] * veic_info["comprimento"] * veic_info["altura"]
+            )
+        else:
+            capacidade_max = (
+                veic_info["largura"] * veic_info["comprimento"]
+            )
+    
+        # ✅ score correto
         score = calcular_score(
-            volume_total,
-            row["Volume Máx"],
+            valor_total,
+            capacidade_max,
             peso_total,
             row["Peso Máx"]
         )
     
         # ===============================
-        # NOVO DESEMPATE OPERACIONAL
+        # DESEMPATE OPERACIONAL
         # ===============================
         tipo = row["Veículo"].lower()
     
         bonus_operacional = 0
     
-        # cargas longas / industriais
         if "aberto" in tipo:
             bonus_operacional += 2
-    
-        # proteção climática
         elif "baú" in tipo:
             bonus_operacional += 1.5
-    
-        # acesso lateral
         elif "sider" in tipo:
             bonus_operacional += 1
     
@@ -1289,15 +1346,11 @@ def executar_calculo(cargas, df_veiculos, selecionados):
             "Veículo": row["Veículo"],
             "Status": "Viável",
             "Motivo": "",
-            "Aproveitamento Volume (%)": round(
-                (volume_total / row["Volume Máx"]) * 100, 2
-            ),
-            "Aproveitamento Peso (%)": round(
-                (peso_total / row["Peso Máx"]) * 100, 2
-            ),
+            "Aproveitamento (%)": round((valor_total / capacidade_max) * 100, 2),
+            "Aproveitamento Peso (%)": round((peso_total / row["Peso Máx"]) * 100, 2),
             "Score": round(score_final, 2)
         })
-    
+
     df_rank = (
         pd.DataFrame(ranking)
         .merge(
@@ -1401,13 +1454,13 @@ if (
                 )
 
     
-        volume_total, peso_total = calcular_totais(st.session_state.cargas)
+        valor_total, peso_total = calcular_totais(st.session_state.cargas)
     
         melhor_row = df_rank.iloc[0]
         info_veic = df_veiculos[df_veiculos["Veículo"] == melhor_row["Veículo"]].iloc[0]
 
         fator_limitante = identificar_fator_limitante(
-            volume_total,
+            valor_total,
             info_veic["largura"] * info_veic["comprimento"] * info_veic["altura"],
             peso_total,
             info_veic["peso_max"]
@@ -1416,7 +1469,7 @@ if (
         st.info(
             gerar_justificativa_veiculo(
                 melhor_row["Veículo"],
-                volume_total,
+                valor_total,
                 peso_total,
                 info_veic["largura"] * info_veic["comprimento"] * info_veic["altura"],
                 info_veic["peso_max"],
@@ -1465,10 +1518,10 @@ if st.button("🔍 Simular Empilhamento 3D"):
         st.error("Execute o cálculo antes da simulação.")
         st.stop()
 
-    if st.session_state.cenario != "UNICO":
-        st.warning("Simulação 3D disponível apenas para cenário de veículo único.")
+    if not empilhavel:
+        st.warning("Simulação 3D disponível apenas com empilhamento ativado.")
         st.stop()
-
+        
     # Veículo vencedor
     melhor_veiculo = st.session_state.df_result.iloc[0]["Veículo"]
     veic = df_veiculos[df_veiculos["Veículo"] == melhor_veiculo].iloc[0]
@@ -1483,10 +1536,10 @@ if st.button("🔍 Simular Empilhamento 3D"):
     )
 
     # Corte antecipado por volume impossível
-    volume_total_caixas = sum(c["volume"] for c in cargas_unitarias)
+    valor_total_caixas = sum(c["volume"] for c in cargas_unitarias)
     volume_veiculo = veic["largura"] * veic["comprimento"] * veic["altura"]
 
-    if volume_total_caixas > volume_veiculo * 1.05:
+    if valor_total_caixas > volume_veiculo * 1.05:
         st.error("❌ O volume das caixas excede a capacidade física do veículo.")
         st.stop()
 
