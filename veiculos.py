@@ -1099,7 +1099,8 @@ def executar_calculo(cargas, df_veiculos, selecionados):
             capacidade_max = veic["largura"] * veic["comprimento"]
         
         # 🔴 BLOQUEIO GLOBAL
-        if capacidade_max > valor_total * 2:
+        if capacidade_max > valor_total * 1.5:
+
             continue
         
         if status == "Viável":
