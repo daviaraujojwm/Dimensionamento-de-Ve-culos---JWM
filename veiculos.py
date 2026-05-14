@@ -967,9 +967,6 @@ def gerar_cenarios_multi(cargas, df_veiculos, empilhavel=True, max_opcoes=5):
         cap_vol *= EFICIENCIA
         cap_peso = veic["peso_max"]
 
-        if cap_vol <= 0:
-            continue
-
         # ============================
         # CÁLCULO DE QUANTIDADE
         # ============================
@@ -977,27 +974,33 @@ def gerar_cenarios_multi(cargas, df_veiculos, empilhavel=True, max_opcoes=5):
             volume_total / cap_vol,
             peso_total / cap_peso
         ) + 0.999)
-
+        
         if qtd <= 0:
             continue
-
-        # ============================
-        # FILTROS DE VIABILIDADE
-        # ============================
-
+        
         # 🔴 muitos veículos → descarta
         if qtd > 5:
             continue
-
+        
+        # ✅ agora sim calcula aproveitamento
         aproveitamento_vol = volume_total / (cap_vol * qtd)
         aproveitamento_peso = peso_total / (cap_peso * qtd)
 
+        
         # 🔴 pouco aproveitamento → descarta
         if aproveitamento_vol < 0.6:
             continue
-
-        # 🔴 veículo muito grande → descarta
+        
+        # 🔴 veículo muito grande (VOLUME)
         if cap_vol > volume_total * 2:
+            continue
+        
+        # 🔴 evita veículo gigante para carga pequena
+        if volume_total < cap_vol * 0.3:
+            continue
+        
+        # 🔴 evita veículo exagerado no peso
+        if cap_peso > peso_total * 5:
             continue
 
         # ============================
@@ -1171,12 +1174,14 @@ def executar_calculo(cargas, df_veiculos, selecionados):
     
         aproveitamento_vol = valor_total / capacidade_max
         aproveitamento_peso = peso_total / veic_info["peso_max"]
-    
-        # score do único (mesma lógica do ranking)
+        
+        aproveitamento_vol_pct = aproveitamento_vol * 100
+        aproveitamento_peso_pct = aproveitamento_peso * 100
+
         score_unico = (
-            (aproveitamento_vol * 55) +
-            (aproveitamento_peso * 30) +
-            ((100 - abs(aproveitamento_vol*100 - aproveitamento_peso*100)) * 0.15)
+            (aproveitamento_vol_pct * 0.55) +
+            (aproveitamento_peso_pct * 0.30) +
+            ((100 - abs(aproveitamento_vol_pct - aproveitamento_peso_pct)) * 0.15)
         )
     
     # pega melhor MULTI
