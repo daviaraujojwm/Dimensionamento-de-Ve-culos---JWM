@@ -1186,7 +1186,7 @@ def executar_calculo(cargas, df_veiculos, selecionados):
         
         # ✅ AJUSTE CRÍTICO — penaliza veículo grande
         if capacidade_max > valor_total * 2:
-            score_unico -= 50
+            score_unico *= 0.5
     
     # pega melhor MULTI
     score_multi = -1
