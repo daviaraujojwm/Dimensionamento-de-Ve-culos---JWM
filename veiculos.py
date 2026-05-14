@@ -909,19 +909,6 @@ def escolher_veiculo_unico_completo(cargas_unit, df_veiculos):
     
         peso_max = veic["peso_max"]
     
-        # ✅ regra inteligente por faixa de carga
-        if valor_total < 1:
-            pass
-        elif valor_total <= 30:
-            if capacidade_max > valor_total * 1.5:
-                continue
-        elif valor_total <= 100:
-            if capacidade_max > valor_total * 2:
-                continue
-        else:
-            if capacidade_max > valor_total * 3:
-                continue
-
         if (
             valor_total <= capacidade_max
             and peso_total <= peso_max
@@ -1107,18 +1094,9 @@ def executar_calculo(cargas, df_veiculos, selecionados):
         else:
             capacidade_max = veic["largura"] * veic["comprimento"]
         
-        # ✅ regra inteligente por faixa (IGUAL ao outro lugar)
-        if valor_total < 1:
-            pass
-        elif valor_total <= 30:
-            if capacidade_max > valor_total * 1.5:
-                continue
-        elif valor_total <= 100:
-            if capacidade_max > valor_total * 2:
-                continue
-        else:
-            if capacidade_max > valor_total * 3:
-                continue
+        # ✅ NÃO bloquear veículo por tamanho
+        # todos participam → score decide
+        pass
         
         if status == "Viável":
         
@@ -1174,7 +1152,7 @@ def executar_calculo(cargas, df_veiculos, selecionados):
     # ==========================================
     # ✅ COMPARAÇÃO INTELIGENTE
     # ==========================================
-    
+
     score_unico = -1
     
     if veic_unico is not None:
@@ -1191,17 +1169,24 @@ def executar_calculo(cargas, df_veiculos, selecionados):
     
         aproveitamento_vol = valor_total / capacidade_max
         aproveitamento_peso = peso_total / veic_info["peso_max"]
-        
+    
         aproveitamento_vol_pct = aproveitamento_vol * 100
         aproveitamento_peso_pct = aproveitamento_peso * 100
-
+    
         score_unico = (
             (aproveitamento_vol_pct * 0.55) +
             (aproveitamento_peso_pct * 0.30) +
             ((100 - abs(aproveitamento_vol_pct - aproveitamento_peso_pct)) * 0.15)
         )
-        
-    # pega melhor MULTI
+    
+        # ✅ penalização para veículo grande
+        if capacidade_max > valor_total * 1.3:
+            excesso = capacidade_max / valor_total
+            penalidade = min(40, (excesso - 1.3) * 25)
+            score_unico -= penalidade
+    
+    
+    # melhor cenário MULTI
     score_multi = -1
     
     if not df_multi.empty:
@@ -1211,8 +1196,13 @@ def executar_calculo(cargas, df_veiculos, selecionados):
     # ✅ DECISÃO FINAL
     # ==========================================
     
-    if score_unico >= score_multi and veic_unico is not None:
+    # ✅ prioriza MULTI se necessário
+    if veic_unico is None or score_unico < 45:
+        if not df_multi.empty:
+            return df_multi, {"cenario": "MULTI"}
     
+    # ✅ cenário de veículo único
+    if veic_unico is not None:
         return pd.DataFrame([{
             "Veículo": veic_info["Veículo"],
             "Status": "Viável",
@@ -1222,95 +1212,13 @@ def executar_calculo(cargas, df_veiculos, selecionados):
             "Score": round(score_unico, 2)
         }]), {"cenario": "UNICO"}
     
+    # ✅ fallback MULTI
     if not df_multi.empty:
         return df_multi, {"cenario": "MULTI"}
+    
+    # ✅ fallback final
+    return pd.DataFrame(), {"cenario": None}
 
-    
-    # ✅ CASO NÃO SEJA CARRETA → RANKING NORMAL
-    ranking = []
-    
-    for _, row in df_viaveis.iterrows():
-
-        # 🔧 pega dados do veículo
-        veic_info = df_veiculos[df_veiculos["Veículo"] == row["Veículo"]].iloc[0]
-    
-        # ✅ capacidade depende do modo
-        if empilhavel:
-            capacidade_max = (
-                veic_info["largura"] * veic_info["comprimento"] * veic_info["altura"]
-            )
-        else:
-            capacidade_max = (
-                veic_info["largura"] * veic_info["comprimento"]
-            )
-    
-        # ✅ score correto
-        score = calcular_score(
-            valor_total,
-            capacidade_max,
-            peso_total,
-            row["Peso Máx"]
-        )
-        
-        # 🔥 penalização forte para veículo superdimensionado
-        if capacidade_max > valor_total * 1.3:
-            excesso = capacidade_max / valor_total
-            penalidade = min(40, (excesso - 1.3) * 25)
-            score -= penalidade
-                
-        # ✅ NOVO: penalização por veículo grande (ESSENCIAL)
-        volume_veiculo = veic_info["Capacidade Volume (m³)"]
-        
-        # ===============================
-        # DESEMPATE OPERACIONAL
-        # ===============================
-        tipo = row["Veículo"].lower()
-    
-        bonus_operacional = 0
-    
-        if "aberto" in tipo:
-            bonus_operacional += 2
-        elif "baú" in tipo:
-            bonus_operacional += 1.5
-        elif "sider" in tipo:
-            bonus_operacional += 1
-    
-        score_final = score + bonus_operacional
-    
-        ranking.append({
-            "Veículo": row["Veículo"],
-            "Status": "Viável",
-            "Motivo": "",
-            "Aproveitamento (%)": round((valor_total / capacidade_max) * 100, 2),
-            "Aproveitamento Peso (%)": round((peso_total / row["Peso Máx"]) * 100, 2),
-            "Score": round(score_final, 2)
-        })
-
-    # ✅ proteção antes do merge
-    if not ranking:
-        return pd.DataFrame(), {"cenario": None}
-    
-    df_rank = (
-        pd.DataFrame(ranking)
-        .merge(
-            df_veiculos[["Veículo", "Capacidade Volume (m³)"]],
-            on="Veículo",
-            how="left"
-        )
-        .sort_values(
-            by=["Score", "Capacidade Volume (m³)"],
-            ascending=[False, True]
-        )
-        .drop(columns=["Capacidade Volume (m³)"])
-        .reset_index(drop=True)
-    )
-    
-    # ✅ se nenhum veículo for viável → usar MULTI
-    if df_viaveis.empty:
-        df_multi = gerar_cenarios_multi(cargas, df_veiculos, empilhavel)
-    
-        return df_multi, {"cenario": "MULTI"}
-    return df_rank, {"cenario": "UNICO"}
 
 # ============================
 # 🚀 BOTÃO CALCULAR
