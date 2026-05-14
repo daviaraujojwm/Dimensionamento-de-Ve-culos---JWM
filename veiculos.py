@@ -1020,14 +1020,12 @@ def calcular_multi_veiculos(cargas, df_veiculos):
         df_multi = df_veiculos
 
     # ✅ só agora tenta UNICO dentro do MULTI
-    veic_unico = escolher_veiculo_unico_completo(cargas_unit, df_multi)
+    # 🚛 MULTI fragmentado
+    veiculos_ordenados = df_multi.sort_values(
+        by="Capacidade Volume (m³)",
+        ascending=True
+    )
 
-    if veic_unico is not None:
-        return [{
-            "Veículo": veic_unico["Veículo"],
-            "Qtd Caixas": len(cargas_unit),
-            "Peso Total (kg)": round(sum(c["peso"] for c in cargas_unit), 2)
-        }], len(cargas_unit)
 
     # 🚛 MULTI fragmentado respeitando bloqueio
     veiculos_ordenados = df_multi.sort_values(
