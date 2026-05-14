@@ -1148,45 +1148,79 @@ def executar_calculo(cargas, df_veiculos, selecionados):
     )
     
     df_multi = gerar_cenarios_multi(cargas, df_testar, empilhavel)
-    
-    # ==========================================
-    # ✅ RANKING FINAL (PROFISSIONAL)
-    # ==========================================
 
+    # ==========================
+    # ✅ FUNÇÃO COMBO
+    # ==========================
+    def gerar_combinacoes(df_testar, valor_total, peso_total):
+        combos = []
+
+        for _, v1 in df_testar.iterrows():
+            for _, v2 in df_testar.iterrows():
+
+                if empilhavel:
+                    cap1 = v1["largura"] * v1["comprimento"] * v1["altura"]
+                    cap2 = v2["largura"] * v2["comprimento"] * v2["altura"]
+                else:
+                    cap1 = v1["largura"] * v1["comprimento"]
+                    cap2 = v2["largura"] * v2["comprimento"]
+
+                cap_total = cap1 + cap2
+                peso_cap = v1["peso_max"] + v2["peso_max"]
+
+                if valor_total > cap_total:
+                    continue
+                if peso_total > peso_cap:
+                    continue
+
+                aproveitamento_vol = valor_total / cap_total * 100
+                aproveitamento_peso = peso_total / peso_cap * 100
+
+                score = (
+                    (aproveitamento_vol * 0.55)
+                    + (aproveitamento_peso * 0.30)
+                    + ((100 - abs(aproveitamento_vol - aproveitamento_peso)) * 0.15)
+                )
+
+                combos.append({
+                    "Veículo": f'{v1["Veículo"]} + {v2["Veículo"]}',
+                    "Status": "Combo",
+                    "Motivo": "Combinação otimizada",
+                    "Aproveitamento (%)": round(aproveitamento_vol, 2),
+                    "Aproveitamento Peso (%)": round(aproveitamento_peso, 2),
+                    "Score": round(score, 2)
+                })
+
+        return pd.DataFrame(combos)
+
+    # ==========================
+    # ✅ RANKING (AQUI COMEÇA)
+    # ==========================
     ranking = []
-    
+
     for _, veic in df_testar.iterrows():
-    
+
         if empilhavel:
             capacidade_max = veic["largura"] * veic["comprimento"] * veic["altura"]
         else:
             capacidade_max = veic["largura"] * veic["comprimento"]
-    
+
         peso_max = veic["peso_max"]
-    
-        # ❌ elimina só inválidos reais
+
         if peso_total > peso_max:
             continue
-    
         if valor_total > capacidade_max:
             continue
-    
-        # ✅ cálculo de aproveitamento
+
         aproveitamento_vol = valor_total / capacidade_max * 100
         aproveitamento_peso = peso_total / peso_max * 100
-    
+
         score = (
-            (aproveitamento_vol * 0.55) +
-            (aproveitamento_peso * 0.30) +
-            ((100 - abs(aproveitamento_vol - aproveitamento_peso)) * 0.15)
+            (aproveitamento_vol * 0.55)
+            + (aproveitamento_peso * 0.30)
+            + ((100 - abs(aproveitamento_vol - aproveitamento_peso)) * 0.15)
         )
-    
-        # ✅ penalização para veículo grande
-        if capacidade_max > valor_total * 1.3:
-            excesso = capacidade_max / valor_total
-            penalidade = min(50, (excesso - 1.3) * 30)
-            score -= penalidade
-    
+
         ranking.append({
             "Veículo": veic["Veículo"],
             "Status": "Viável",
@@ -1195,29 +1229,19 @@ def executar_calculo(cargas, df_veiculos, selecionados):
             "Aproveitamento Peso (%)": round(aproveitamento_peso, 2),
             "Score": round(score, 2)
         })
-    
+
     df_rank = pd.DataFrame(ranking)
-    
-    # ✅ ordena ranking
+
+    # ✅ junta combo
+    df_combo = gerar_combinacoes(df_testar, valor_total, peso_total)
+
+    if not df_combo.empty:
+        df_rank = pd.concat([df_rank, df_combo], ignore_index=True)
+
     if not df_rank.empty:
         df_rank = df_rank.sort_values(by="Score", ascending=False).reset_index(drop=True)
-    
-    # ✅ fallback MULTI
-    if df_rank.empty:
-        if not df_multi.empty:
-            return df_multi, {"cenario": "MULTI"}
-        return pd.DataFrame(), {"cenario": None}
-    
-    # ✅ se score baixo → MULTI
-    if df_rank.iloc[0]["Score"] < 45:
-        if not df_multi.empty:
-            return df_multi, {"cenario": "MULTI"}
-    
-    # ✅ retorna ranking final
+
     return df_rank, {"cenario": "RANKING"}
-
-
-
 # ============================
 # 🚀 BOTÃO CALCULAR
 # ============================
