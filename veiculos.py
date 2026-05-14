@@ -1325,15 +1325,50 @@ if (
         valor_total, peso_total = calcular_totais(st.session_state.cargas)
     
         melhor_row = df_rank.iloc[0]
-        info_veic = df_veiculos[df_veiculos["Veículo"] == melhor_row["Veículo"]].iloc[0]
-
+        
+        nome_veiculo = melhor_row["Veículo"]
+        
+        # ✅ COMBO INTELIGENTE (USA OS DOIS VEÍCULOS)
+        if " + " in nome_veiculo:
+            partes = nome_veiculo.split(" + ")
+        
+            df_parte = df_veiculos[df_veiculos["Veículo"].isin(partes)]
+        
+            if df_parte.empty:
+                st.warning("⚠ Veículos do combo não encontrados.")
+                st.stop()
+        
+            # 🔥 soma capacidades dos veículos
+            largura = df_parte["largura"].max()
+            comprimento = df_parte["comprimento"].sum()
+            altura = df_parte["altura"].max()
+            peso_max = df_parte["peso_max"].sum()
+        
+            info_veic = {
+                "largura": largura,
+                "comprimento": comprimento,
+                "altura": altura,
+                "peso_max": peso_max
+            }
+        
+        # ✅ VEÍCULO ÚNICO NORMAL
+        else:
+            filtro = df_veiculos[df_veiculos["Veículo"] == nome_veiculo]
+        
+            if filtro.empty:
+                st.warning("⚠ Veículo não encontrado na base.")
+                st.stop()
+        
+            info_veic = filtro.iloc[0]
+        
+        
         fator_limitante = identificar_fator_limitante(
             valor_total,
             info_veic["largura"] * info_veic["comprimento"] * info_veic["altura"],
             peso_total,
             info_veic["peso_max"]
         )
-
+        
         st.info(
             gerar_justificativa_veiculo(
                 melhor_row["Veículo"],
