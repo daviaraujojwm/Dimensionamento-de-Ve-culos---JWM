@@ -1154,34 +1154,48 @@ def executar_calculo(cargas, df_veiculos, selecionados):
     # ==========================
     def gerar_combinacoes(df_testar, valor_total, peso_total):
         combos = []
-
-        for _, v1 in df_testar.iterrows():
-            for _, v2 in df_testar.iterrows():
-
+        usados = set()
+    
+        for i, v1 in df_testar.iterrows():
+            for j, v2 in df_testar.iterrows():
+    
+                # ✅ evita duplicidade (A+B e B+A)
+                if j <= i:
+                    continue
+    
+                chave = tuple(sorted([v1["Veículo"], v2["Veículo"]]))
+                if chave in usados:
+                    continue
+                usados.add(chave)
+    
                 if empilhavel:
                     cap1 = v1["largura"] * v1["comprimento"] * v1["altura"]
                     cap2 = v2["largura"] * v2["comprimento"] * v2["altura"]
                 else:
                     cap1 = v1["largura"] * v1["comprimento"]
                     cap2 = v2["largura"] * v2["comprimento"]
-
+    
                 cap_total = cap1 + cap2
                 peso_cap = v1["peso_max"] + v2["peso_max"]
-
+    
                 if valor_total > cap_total:
                     continue
                 if peso_total > peso_cap:
                     continue
-
+    
                 aproveitamento_vol = valor_total / cap_total * 100
                 aproveitamento_peso = peso_total / peso_cap * 100
-
+                
+                # 🔥 FILTRO DE QUALIDADE (AQUI)
+                if aproveitamento_vol < 50:
+                    continue
+                
                 score = (
                     (aproveitamento_vol * 0.55)
                     + (aproveitamento_peso * 0.30)
                     + ((100 - abs(aproveitamento_vol - aproveitamento_peso)) * 0.15)
                 )
-
+                
                 combos.append({
                     "Veículo": f'{v1["Veículo"]} + {v2["Veículo"]}',
                     "Status": "Combo",
@@ -1190,8 +1204,14 @@ def executar_calculo(cargas, df_veiculos, selecionados):
                     "Aproveitamento Peso (%)": round(aproveitamento_peso, 2),
                     "Score": round(score, 2)
                 })
-
-        return pd.DataFrame(combos)
+    
+        df = pd.DataFrame(combos)
+    
+        # ✅ só o MELHOR combo
+        if not df.empty:
+            df = df.sort_values(by="Score", ascending=False).head(1)
+    
+        return df
 
     # ==========================
     # ✅ RANKING (AQUI COMEÇA)
