@@ -581,19 +581,6 @@ def calcular_score(volume_usado, volume_max, peso_usado, peso_max):
 
     return round(score, 2)
 
-    aproveitamento_volume = min(100, aproveitamento_volume)
-    aproveitamento_peso = min(100, aproveitamento_peso)
-
-    balanceamento = 100 - abs(aproveitamento_volume - aproveitamento_peso)
-
-    score = (
-        (aproveitamento_volume * 0.55) +
-        (aproveitamento_peso * 0.30) +
-        (balanceamento * 0.15)
-    )
-
-    return round(score, 2)
-
 def identificar_fator_limitante(
     volume_usado, volume_max,
     peso_usado, peso_max,
@@ -647,22 +634,6 @@ def gerar_justificativa_veiculo(
         )
 
     return texto
-
-
-
-def buscar_veiculo_maior_por_peso(peso_total, df_veiculos):
-    """
-    Retorna o MENOR veículo que comporte o peso total,
-    escalando para carretas se necessário.
-    """
-    veiculos_ordenados = df_veiculos.sort_values("peso_max")
-
-    for _, veic in veiculos_ordenados.iterrows():
-        if peso_total <= veic["peso_max"]:
-            return veic
-
-    return None
-
 
 def reduzir_cargas_para_simulacao(cargas, limite):
     """
@@ -905,42 +876,6 @@ def simular_empilhamento_3d(
 
     return posicoes_ocupadas, caixas_alocadas, volume_usado, peso_acumulado
 
-# ==========================================
-# ✅ FUNÇÃO PARA COMPLEMENTO RESIDUAL
-# ==========================================
-def escolher_veiculo_menor_viavel(cargas_restantes, df_veiculos):
-
-    volume_restante = sum(c["volume"] for c in cargas_restantes)
-    peso_restante = sum(c["peso"] for c in cargas_restantes)
-
-    # 🔒 Dimensões máximas unitárias
-    max_comp = max(c["comp"] for c in cargas_restantes)
-    max_larg = max(c["larg"] for c in cargas_restantes)
-    max_alt  = max(c["alt"] for c in cargas_restantes)
-
-    veiculos_ordenados = df_veiculos.sort_values(
-        by="Capacidade Volume (m³)",
-        ascending=True
-    )
-
-    for _, veic in veiculos_ordenados.iterrows():
-
-        volume_max = veic["comprimento"] * veic["largura"] * veic["altura"]
-        peso_max = veic["peso_max"]
-
-        # ✅ HARD RULE COMPLETA
-        if (
-            volume_restante <= volume_max
-            and peso_restante <= peso_max
-            and max_alt <= veic["altura"]
-            and max_larg <= veic["largura"]
-            and max_comp <= veic["comprimento"]
-        ):
-            return veic
-
-    return None
-
-
 def escolher_veiculo_unico_completo(cargas_unit, df_veiculos):
     """
     Retorna o MENOR veículo que comporta TODA a carga
@@ -988,8 +923,16 @@ def escolher_veiculo_unico_completo(cargas_unit, df_veiculos):
 
 def gerar_cenarios_multi(cargas, df_veiculos, empilhavel=True, max_opcoes=5):
 
+    EFICIENCIA = 0.85
+
+    # ============================
+    # EXPANSÃO DAS CARGAS
+    # ============================
     cargas_unit = expand_cargas_unitarias(cargas)
 
+    # ============================
+    # TOTAIS
+    # ============================
     if empilhavel:
         volume_total = sum(c["volume"] for c in cargas_unit)
     else:
@@ -999,224 +942,91 @@ def gerar_cenarios_multi(cargas, df_veiculos, empilhavel=True, max_opcoes=5):
 
     cenarios = []
 
+    # ============================
+    # ORDENA VEÍCULOS (MENOR → MAIOR)
+    # ============================
     veiculos_ordenados = df_veiculos.sort_values(
         by="Capacidade Volume (m³)"
     )
 
+    # ============================
+    # LOOP PRINCIPAL
+    # ============================
     for _, veic in veiculos_ordenados.iterrows():
 
+        # ✅ capacidade com eficiência real
         if empilhavel:
-            capacidade_vol = (
+            cap_vol = (
                 veic["largura"] * veic["comprimento"] * veic["altura"]
             )
         else:
-            capacidade_vol = (
+            cap_vol = (
                 veic["largura"] * veic["comprimento"]
             )
 
-        capacidade_peso = veic["peso_max"]
+        cap_vol *= EFICIENCIA
+        cap_peso = veic["peso_max"]
 
-        if capacidade_vol <= 0:
+        if cap_vol <= 0:
             continue
 
-        qtd_vol = volume_total / capacidade_vol
-        qtd_peso = peso_total / capacidade_peso
+        # ============================
+        # CÁLCULO DE QUANTIDADE
+        # ============================
+        qtd = int(max(
+            volume_total / cap_vol,
+            peso_total / cap_peso
+        ) + 0.999)
 
-        qtd_veiculos = int(max(qtd_vol, qtd_peso) + 0.999)
-
-        if qtd_veiculos <= 0:
+        if qtd <= 0:
             continue
+
+        # ============================
+        # FILTROS DE VIABILIDADE
+        # ============================
+
+        # 🔴 muitos veículos → descarta
+        if qtd > 5:
+            continue
+
+        aproveitamento_vol = volume_total / (cap_vol * qtd)
+        aproveitamento_peso = peso_total / (cap_peso * qtd)
+
+        # 🔴 pouco aproveitamento → descarta
+        if aproveitamento_vol < 0.6:
+            continue
+
+        # 🔴 veículo muito grande → descarta
+        if cap_vol > volume_total * 2:
+            continue
+
+        # ============================
+        # SCORE INTELIGENTE
+        # ============================
+        score = (
+            (1 / qtd) * 60 +
+            (aproveitamento_vol * 25) +
+            (aproveitamento_peso * 15)
+        )
 
         cenarios.append({
             "Veículo": veic["Veículo"],
-            "Qtd Veículos": qtd_veiculos,
-            "Volume Atendido": round(capacidade_vol * qtd_veiculos, 2),
-            "Peso Atendido": round(capacidade_peso * qtd_veiculos, 2)
+            "Qtd Veículos": qtd,
+            "Aproveitamento Volume (%)": round(aproveitamento_vol * 100, 1),
+            "Aproveitamento Peso (%)": round(aproveitamento_peso * 100, 1),
+            "Score": round(score, 2)
         })
 
-        if len(cenarios) >= max_opcoes:
-            break
+    # ============================
+    # ORGANIZA RESULTADO
+    # ============================
+    df = pd.DataFrame(cenarios)
 
-    return pd.DataFrame(cenarios)
+    if not df.empty:
+        df = df.sort_values(by="Score", ascending=False)
 
-def gerar_cenarios_multi(cargas, df_veiculos, empilhavel=True, max_opcoes=5):
-
-    cargas_unit = expand_cargas_unitarias(cargas)
-
-    if empilhavel:
-        volume_total = sum(c["volume"] for c in cargas_unit)
-    else:
-        volume_total = sum(c["comp"] * c["larg"] for c in cargas_unit)
-
-    peso_total = sum(c["peso"] for c in cargas_unit)
-
-    cenarios = []
-
-    veiculos_ordenados = df_veiculos.sort_values(
-        by="Capacidade Volume (m³)"
-    )
-
-    for _, veic in veiculos_ordenados.iterrows():
-
-        if empilhavel:
-            capacidade_vol = (
-                veic["largura"] * veic["comprimento"] * veic["altura"]
-            )
-        else:
-            capacidade_vol = (
-                veic["largura"] * veic["comprimento"]
-            )
-
-        capacidade_peso = veic["peso_max"]
-
-        if capacidade_vol <= 0:
-            continue
-
-        qtd_vol = volume_total / capacidade_vol
-        qtd_peso = peso_total / capacidade_peso
-
-        qtd_veiculos = int(max(qtd_vol, qtd_peso) + 0.999)
-
-        if qtd_veiculos <= 0:
-            continue
-
-        cenarios.append({
-            "Veículo": veic["Veículo"],
-            "Qtd Veículos": qtd_veiculos,
-            "Volume Atendido": round(capacidade_vol * qtd_veiculos, 2),
-            "Peso Atendido": round(capacidade_peso * qtd_veiculos, 2)
-        })
-
-        if len(cenarios) >= max_opcoes:
-            break
-
-    return pd.DataFrame(cenarios)
+    return df.head(max_opcoes)
         
-        # ==================================================
-        # ✅ CONSOLIDAÇÃO ECONÔMICA DO RESÍDUO
-        # ==================================================
-        if len(cargas_restantes) <= LIMIAR_MINIMO_CAIXAS:
-
-            # tenta consolidar no último veículo usado
-            if resultado:
-                ultimo_veic = resultado[-1]["Veículo"]
-                veic_info = df_veiculos[
-                    df_veiculos["Veículo"] == ultimo_veic
-                ].iloc[0]
-
-                if all(
-                    c["peso"] <= veic_info["peso_max"]
-                    for c in cargas_restantes
-                ):
-                    resultado[-1]["Qtd Caixas"] += len(cargas_restantes)
-                    resultado[-1]["Peso Total (kg)"] = round(
-                        resultado[-1]["Peso Total (kg)"] +
-                        sum(c["peso"] for c in cargas_restantes),
-                        2
-                    )
-                    cargas_restantes = []
-                    break
-
-            # se não conseguiu consolidar, cria novo veículo
-            veic_menor = escolher_veiculo_menor_viavel(
-                cargas_restantes,
-                df_veiculos
-            )
-
-            if veic_menor is not None:
-                resultado.append({
-                    "Veículo": veic_menor["Veículo"],
-                    "Qtd Caixas": len(cargas_restantes),
-                    "Peso Total (kg)": round(
-                        sum(c["peso"] for c in cargas_restantes), 2
-                    )
-                })
-                cargas_restantes = []
-                break
-
-        # ==================================================
-        # 🚛 LOOP NORMAL DE ALOCAÇÃO
-        # ==================================================
-        alocou_algum = False
-
-        for _, veic in veiculos_ordenados.iterrows():
-        
-            if not cargas_restantes:
-                break
-        
-            comp_v = veic["comprimento"]
-            larg_v = veic["largura"]
-            alt_v = veic["altura"]
-            peso_max = veic["peso_max"]
-        
-            alocadas = []
-            peso_total = 0
-            volume_ocupado = 0
-            novas_restantes = []
-        
-            for carga in cargas_restantes:
-        
-                if empilhavel:
-                    valor_carga = carga["volume"]
-                    capacidade_veic = comp_v * larg_v * alt_v
-                else:
-                    valor_carga = carga["comp"] * carga["larg"]
-                    capacidade_veic = comp_v * larg_v
-        
-                if excede_capacidade(
-                    peso_total,
-                    volume_ocupado,
-                    carga["peso"],
-                    valor_carga,
-                    peso_max,
-                    capacidade_veic
-                ):
-                    novas_restantes.append(carga)
-                    continue
-        
-                cabe = cabe_no_piso_heuristica(
-                    alocadas + [carga],
-                    comp_v,
-                    larg_v,
-                    alt_v
-                )
-        
-                if cabe:
-                    alocadas.append(carga)
-                    peso_total += carga["peso"]
-                    volume_ocupado += valor_carga
-                else:
-                    novas_restantes.append(carga)
-        
-            # ✅ ✅ ✅ ESTA LINHA TEM QUE FICAR AQUI (DENTRO DO FOR)
-            if alocadas:
-        
-                existente = next(
-                    (r for r in resultado if r["Veículo"] == veic["Veículo"]),
-                    None
-                )
-        
-                if existente:
-                    existente["Qtd Caixas"] += len(alocadas)
-                    existente["Peso Total (kg)"] += round(peso_total, 2)
-                else:
-                    resultado.append({
-                        "Veículo": veic["Veículo"],
-                        "Qtd Caixas": len(alocadas),
-                        "Peso Total (kg)": round(peso_total, 2)
-                    })
-        
-                cargas_restantes = novas_restantes
-        
-                break  # ✅ CRÍTICO
-
-
-        if not alocou_algum:
-            break
-
-    total_alocado = sum(r["Qtd Caixas"] for r in resultado)
-    return resultado, total_alocado
-
 def executar_calculo(cargas, df_veiculos, selecionados):
     """
     Função central do sistema.
@@ -1339,10 +1149,15 @@ def executar_calculo(cargas, df_veiculos, selecionados):
         df_veiculos
     )
     
-    # ✅ SEMPRE calcula MULTI
-    # ✅ 1️⃣ PRIMEIRO tenta veículo único (ESSENCIAL)
-    if veic_unico is not None:
+    df_multi = gerar_cenarios_multi(cargas, df_testar, empilhavel)
     
+    # ==========================================
+    # ✅ COMPARAÇÃO INTELIGENTE
+    # ==========================================
+    
+    score_unico = -1
+    
+    if veic_unico is not None:
         veic_info = veic_unico
     
         if empilhavel:
@@ -1354,18 +1169,36 @@ def executar_calculo(cargas, df_veiculos, selecionados):
                 veic_info["largura"] * veic_info["comprimento"]
             )
     
+        aproveitamento_vol = valor_total / capacidade_max
+        aproveitamento_peso = peso_total / veic_info["peso_max"]
+    
+        # score do único (mesma lógica do ranking)
+        score_unico = (
+            (aproveitamento_vol * 55) +
+            (aproveitamento_peso * 30) +
+            ((100 - abs(aproveitamento_vol*100 - aproveitamento_peso*100)) * 0.15)
+        )
+    
+    # pega melhor MULTI
+    score_multi = -1
+    
+    if not df_multi.empty:
+        score_multi = df_multi.iloc[0]["Score"]
+    
+    # ==========================================
+    # ✅ DECISÃO FINAL
+    # ==========================================
+    
+    if score_unico >= score_multi and veic_unico is not None:
+    
         return pd.DataFrame([{
             "Veículo": veic_info["Veículo"],
             "Status": "Viável",
-            "Motivo": "Menor veículo que comporta toda a carga",
+            "Motivo": "Melhor cenário geral (veículo único)",
             "Aproveitamento (%)": round((valor_total / capacidade_max) * 100, 2),
             "Aproveitamento Peso (%)": round((peso_total / veic_info["peso_max"]) * 100, 2),
-            "Score": 100
+            "Score": round(score_unico, 2)
         }]), {"cenario": "UNICO"}
-    
-    
-    # ✅ MULTI INTELIGENTE (cenários completos)
-    df_multi = gerar_cenarios_multi(cargas, df_testar, empilhavel)
     
     if not df_multi.empty:
         return df_multi, {"cenario": "MULTI"}
@@ -1445,10 +1278,9 @@ def executar_calculo(cargas, df_veiculos, selecionados):
     
     # ✅ se nenhum veículo for viável → usar MULTI
     if df_viaveis.empty:
-        multi_resultado, total_alocado = calcular_multi_veiculos(cargas, df_veiculos)
+        df_multi = gerar_cenarios_multi(cargas, df_veiculos, empilhavel)
     
-        return pd.DataFrame(multi_resultado), {"cenario": "MULTI"}
-    
+        return df_multi, {"cenario": "MULTI"}
     return df_rank, {"cenario": "UNICO"}
 
 # ============================
