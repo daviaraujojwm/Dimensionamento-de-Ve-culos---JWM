@@ -979,7 +979,7 @@ def gerar_cenarios_multi(cargas, df_veiculos, empilhavel=True, max_opcoes=5):
             continue
         
         # 🔴 muitos veículos → descarta
-        if qtd > 5:
+        if qtd > 3:
             continue
         
         # ✅ agora sim calcula aproveitamento
@@ -1183,6 +1183,10 @@ def executar_calculo(cargas, df_veiculos, selecionados):
             (aproveitamento_peso_pct * 0.30) +
             ((100 - abs(aproveitamento_vol_pct - aproveitamento_peso_pct)) * 0.15)
         )
+        
+        # ✅ AJUSTE CRÍTICO — penaliza veículo grande
+        if capacidade_max > valor_total * 2:
+            score_unico -= 50
     
     # pega melhor MULTI
     score_multi = -1
