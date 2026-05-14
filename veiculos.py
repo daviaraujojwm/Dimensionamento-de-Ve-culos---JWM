@@ -1288,137 +1288,48 @@ if st.button("🚀 Calcular Dimensionamento", disabled=not st.session_state.carg
         st.info("Nenhum cenário definido.")
 
 # ============================
-# 📊 EXIBIÇÃO DOS RESULTADOS
+# 📊 EXIBIÇÃO DOS RESULTADOS (AJUSTADO)
 # ============================
 
-if (
-    isinstance(st.session_state.df_result, pd.DataFrame)
-    and not st.session_state.df_result.empty
-    and st.session_state.cenario is not None
-):
+if isinstance(st.session_state.df_result, pd.DataFrame):
+
+    # ✅ CASO NÃO TENHA RESULTADO
+    if st.session_state.df_result.empty:
+        st.warning("⚠ Nenhuma combinação ou veículo atendeu aos critérios definidos.")
+        st.info("💡 Dica: reduza o filtro ou aumente a quantidade da carga.")
+        st.stop()
 
     st.divider()
 
     # ----------------------------
-    # 🚚 CENÁRIO: VEÍCULO ÚNICO
+    # 🚚 CENÁRIO: VEÍCULO / RANKING
     # ----------------------------
     if st.session_state.cenario in ["UNICO", "RANKING"]:
-    
+
         st.subheader("🏆 Ranking de Veículos Viáveis")
-    
+
         df_rank = st.session_state.df_result.copy()
         df_rank["Ranking"] = df_rank.index + 1
-    
+
         melhor = df_rank.iloc[0]["Veículo"]
-    
+
         def destacar(row):
             styles = [""] * len(row)
-        
-            # ✅ melhor veículo
+
             if row["Veículo"] == melhor:
                 styles = ["background-color:#145A32;color:white;font-weight:bold"] * len(row)
-        
-            # ⚠️ veículo penalizado
             elif row["Motivo"] != "":
                 styles = ["background-color:#FFF3CD;color:#856404"] * len(row)
-        
+
             return styles
-    
+
         st.dataframe(
             df_rank.style.apply(destacar, axis=1),
             use_container_width=True
         )
 
-        # ✅ ganho de eficiência entre 1º e 2º colocados
-        if len(df_rank) >= 2:
-            score_1 = df_rank.iloc[0]["Score"]
-            score_2 = df_rank.iloc[1]["Score"]
-        
-            if score_2 > 0:
-                ganho = ((score_1 - score_2) / score_2) * 100
-                st.info(
-                    f"📈 O veículo escolhido é **{ganho:.1f}%** mais eficiente "
-                    "do que a segunda melhor opção."
-                )
-
-    
-        valor_total, peso_total = calcular_totais(st.session_state.cargas)
-    
-        melhor_row = df_rank.iloc[0]
-        
-        nome_veiculo = melhor_row["Veículo"]
-        
-        # ✅ COMBO INTELIGENTE
-        if " + " in nome_veiculo:
-            partes = nome_veiculo.split(" + ")
-        
-            df_parte = df_veiculos[df_veiculos["Veículo"].isin(partes)]
-        
-            if df_parte.empty:
-                st.warning("⚠ Veículos do combo não encontrados.")
-                st.stop()
-        
-            # 🔥 soma capacidades
-            largura = df_parte["largura"].max()
-            comprimento = df_parte["comprimento"].sum()
-            altura = df_parte["altura"].max()
-            peso_max = df_parte["peso_max"].sum()
-        
-            info_veic = {
-                "largura": largura,
-                "comprimento": comprimento,
-                "altura": altura,
-                "peso_max": peso_max
-            }
-        
-        # ✅ VEÍCULO NORMAL
-        else:
-            filtro = df_veiculos[df_veiculos["Veículo"] == nome_veiculo]
-        
-            if filtro.empty:
-                st.warning("⚠ Veículo não encontrado na base.")
-                st.stop()
-        
-            info_veic = filtro.iloc[0]
-        
-        
-        fator_limitante = identificar_fator_limitante(
-            valor_total,
-            info_veic["largura"] * info_veic["comprimento"] * info_veic["altura"],
-            peso_total,
-            info_veic["peso_max"]
-        )
-        
-        st.info(
-            gerar_justificativa_veiculo(
-                melhor_row["Veículo"],
-                valor_total,
-                peso_total,
-                info_veic["largura"] * info_veic["comprimento"] * info_veic["altura"],
-                info_veic["peso_max"],
-                melhor_row["Score"],
-                caixas_alocadas=len(expand_cargas_unitarias(st.session_state.cargas)),
-                qtd_total_real=len(expand_cargas_unitarias(st.session_state.cargas))
-            )
-        )
-
-        if fator_limitante == "PESO":
-            st.warning(
-                "⚠ **Carga limitada por PESO.**\n\n"
-                "É esperado baixo aproveitamento volumétrico neste cenário."
-            )
-        elif fator_limitante == "VOLUME":
-            st.warning(
-                "⚠ **Carga limitada por VOLUME.**\n\n"
-                "O peso do veículo ainda possui margem disponível."
-            )
-        else:
-            st.success(
-                "✅ **Carga bem equilibrada entre peso e volume.**"
-            )
-
     # ----------------------------
-    # 🚛 CENÁRIO: MULTI VEÍCULO
+    # 🚛 MULTI VEÍCULO
     # ----------------------------
     else:
 
