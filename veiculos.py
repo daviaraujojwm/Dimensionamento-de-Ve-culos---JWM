@@ -986,72 +986,112 @@ def escolher_veiculo_unico_completo(cargas_unit, df_veiculos):
     return None
 
 
-def calcular_multi_veiculos(cargas, df_veiculos):
+def gerar_cenarios_multi(cargas, df_veiculos, empilhavel=True, max_opcoes=5):
 
-    cargas_unit = expand_cargas_unitarias(cargas, limite=MAX_CAIXAS)
-
-    cargas_unit = sorted(
-        cargas_unit,
-        key=lambda x: x["comp"] * x["larg"] * x["alt"],
-        reverse=True
-    )
-
-    # 🚫 BLOQUEIO DE VEÍCULOS GRANDES NO MULTI (ANTES DE QUALQUER ESCOLHA)
-    VOLUME_MINIMO_GRANDES = 0.30
-    COMPRIMENTO_MIN_GRANDE = 11.0  # metros
+    cargas_unit = expand_cargas_unitarias(cargas)
 
     if empilhavel:
-        valor_total = sum(c["volume"] for c in cargas_unit)
+        volume_total = sum(c["volume"] for c in cargas_unit)
     else:
-        valor_total = sum(c["comp"] * c["larg"] for c in cargas_unit)
+        volume_total = sum(c["comp"] * c["larg"] for c in cargas_unit)
 
+    peso_total = sum(c["peso"] for c in cargas_unit)
 
-    capacidade_min_grande = (
-        df_veiculos[df_veiculos["comprimento"] >= COMPRIMENTO_MIN_GRANDE]
-        ["Capacidade Volume (m³)"]
-        .min()
+    cenarios = []
+
+    veiculos_ordenados = df_veiculos.sort_values(
+        by="Capacidade Volume (m³)"
     )
 
-    if valor_total < capacidade_min_grande * VOLUME_MINIMO_GRANDES:
-        df_multi = df_veiculos[
-            df_veiculos["comprimento"] < COMPRIMENTO_MIN_GRANDE
-        ]
-    else:
-        df_multi = df_veiculos
+    for _, veic in veiculos_ordenados.iterrows():
 
-    # ✅ só agora tenta UNICO dentro do MULTI
-    # 🚛 MULTI fragmentado
-    veiculos_ordenados = df_multi.sort_values(
-        by="Capacidade Volume (m³)",
-        ascending=True
-    )
+        if empilhavel:
+            capacidade_vol = (
+                veic["largura"] * veic["comprimento"] * veic["altura"]
+            )
+        else:
+            capacidade_vol = (
+                veic["largura"] * veic["comprimento"]
+            )
 
-    resultado = []
-    cargas_restantes = cargas_unit.copy()
+        capacidade_peso = veic["peso_max"]
 
-    # ... resto da função
-    # ⬇️ DAQUI PRA BAIXO
-    # mantém TODO o seu código atual:
-    # while cargas_restantes:
-    # consolidação
-    # loop de alocação
-    # return resultado, total_alocado
-    # alerta de cargas impossíveis
+        if capacidade_vol <= 0:
+            continue
 
-    if any(c["peso"] > df_veiculos["peso_max"].max() for c in cargas_restantes):
-        st.warning("⚠ Existem cargas com peso maior que qualquer veículo disponível.")
+        qtd_vol = volume_total / capacidade_vol
+        qtd_peso = peso_total / capacidade_peso
 
-    LIMIAR_MINIMO_CAIXAS = 2
-    TOTAL_CAIXAS = len(cargas_unit)
+        qtd_veiculos = int(max(qtd_vol, qtd_peso) + 0.999)
 
-    tentativas = 0
-    MAX_TENTATIVAS = 50
-    
-    while cargas_restantes:
-        tentativas += 1
-        if tentativas > MAX_TENTATIVAS:
+        if qtd_veiculos <= 0:
+            continue
+
+        cenarios.append({
+            "Veículo": veic["Veículo"],
+            "Qtd Veículos": qtd_veiculos,
+            "Volume Atendido": round(capacidade_vol * qtd_veiculos, 2),
+            "Peso Atendido": round(capacidade_peso * qtd_veiculos, 2)
+        })
+
+        if len(cenarios) >= max_opcoes:
             break
 
+    return pd.DataFrame(cenarios)
+
+def gerar_cenarios_multi(cargas, df_veiculos, empilhavel=True, max_opcoes=5):
+
+    cargas_unit = expand_cargas_unitarias(cargas)
+
+    if empilhavel:
+        volume_total = sum(c["volume"] for c in cargas_unit)
+    else:
+        volume_total = sum(c["comp"] * c["larg"] for c in cargas_unit)
+
+    peso_total = sum(c["peso"] for c in cargas_unit)
+
+    cenarios = []
+
+    veiculos_ordenados = df_veiculos.sort_values(
+        by="Capacidade Volume (m³)"
+    )
+
+    for _, veic in veiculos_ordenados.iterrows():
+
+        if empilhavel:
+            capacidade_vol = (
+                veic["largura"] * veic["comprimento"] * veic["altura"]
+            )
+        else:
+            capacidade_vol = (
+                veic["largura"] * veic["comprimento"]
+            )
+
+        capacidade_peso = veic["peso_max"]
+
+        if capacidade_vol <= 0:
+            continue
+
+        qtd_vol = volume_total / capacidade_vol
+        qtd_peso = peso_total / capacidade_peso
+
+        qtd_veiculos = int(max(qtd_vol, qtd_peso) + 0.999)
+
+        if qtd_veiculos <= 0:
+            continue
+
+        cenarios.append({
+            "Veículo": veic["Veículo"],
+            "Qtd Veículos": qtd_veiculos,
+            "Volume Atendido": round(capacidade_vol * qtd_veiculos, 2),
+            "Peso Atendido": round(capacidade_peso * qtd_veiculos, 2)
+        })
+
+        if len(cenarios) >= max_opcoes:
+            break
+
+    return pd.DataFrame(cenarios)
+        
         # ==================================================
         # ✅ CONSOLIDAÇÃO ECONÔMICA DO RESÍDUO
         # ==================================================
@@ -1299,20 +1339,8 @@ def executar_calculo(cargas, df_veiculos, selecionados):
         df_veiculos
     )
     
-    # ✅ NOVO: decidir entre MULTI ou UNICO
-    
-    capacidade_menor = df_veiculos["Capacidade Volume (m³)"].min()
-    
-    # 🔥 se a carga não cabe no menor veículo → tenta MULTI
-    if valor_total > capacidade_menor:
-    
-        multi_resultado, total_alocado = calcular_multi_veiculos(cargas, df_veiculos)
-    
-        # ✅ SE MULTI CONSEGUIU ALOCAR → USA MULTI
-        if multi_resultado and total_alocado > 0:
-            return pd.DataFrame(multi_resultado), {"cenario": "MULTI"}
-    
-    # ✅ se cabe → usa menor veículo único
+    # ✅ SEMPRE calcula MULTI
+    # ✅ 1️⃣ PRIMEIRO tenta veículo único (ESSENCIAL)
     if veic_unico is not None:
     
         veic_info = veic_unico
@@ -1334,6 +1362,13 @@ def executar_calculo(cargas, df_veiculos, selecionados):
             "Aproveitamento Peso (%)": round((peso_total / veic_info["peso_max"]) * 100, 2),
             "Score": 100
         }]), {"cenario": "UNICO"}
+    
+    
+    # ✅ MULTI INTELIGENTE (cenários completos)
+    df_multi = gerar_cenarios_multi(cargas, df_testar, empilhavel)
+    
+    if not df_multi.empty:
+        return df_multi, {"cenario": "MULTI"}
 
     
     # ✅ CASO NÃO SEJA CARRETA → RANKING NORMAL
