@@ -1150,74 +1150,72 @@ def executar_calculo(cargas, df_veiculos, selecionados):
     df_multi = gerar_cenarios_multi(cargas, df_testar, empilhavel)
     
     # ==========================================
-    # ✅ COMPARAÇÃO INTELIGENTE
+    # ✅ RANKING FINAL (PROFISSIONAL)
     # ==========================================
 
-    score_unico = -1
+    ranking = []
     
-    if veic_unico is not None:
-        veic_info = veic_unico
+    for _, veic in df_testar.iterrows():
     
         if empilhavel:
-            capacidade_max = (
-                veic_info["largura"] * veic_info["comprimento"] * veic_info["altura"]
-            )
+            capacidade_max = veic["largura"] * veic["comprimento"] * veic["altura"]
         else:
-            capacidade_max = (
-                veic_info["largura"] * veic_info["comprimento"]
-            )
+            capacidade_max = veic["largura"] * veic["comprimento"]
     
-        aproveitamento_vol = valor_total / capacidade_max
-        aproveitamento_peso = peso_total / veic_info["peso_max"]
+        peso_max = veic["peso_max"]
     
-        aproveitamento_vol_pct = aproveitamento_vol * 100
-        aproveitamento_peso_pct = aproveitamento_peso * 100
+        # ❌ elimina só inválidos reais
+        if peso_total > peso_max:
+            continue
     
-        score_unico = (
-            (aproveitamento_vol_pct * 0.55) +
-            (aproveitamento_peso_pct * 0.30) +
-            ((100 - abs(aproveitamento_vol_pct - aproveitamento_peso_pct)) * 0.15)
+        if valor_total > capacidade_max:
+            continue
+    
+        # ✅ cálculo de aproveitamento
+        aproveitamento_vol = valor_total / capacidade_max * 100
+        aproveitamento_peso = peso_total / peso_max * 100
+    
+        score = (
+            (aproveitamento_vol * 0.55) +
+            (aproveitamento_peso * 0.30) +
+            ((100 - abs(aproveitamento_vol - aproveitamento_peso)) * 0.15)
         )
     
         # ✅ penalização para veículo grande
         if capacidade_max > valor_total * 1.3:
             excesso = capacidade_max / valor_total
-            penalidade = min(40, (excesso - 1.3) * 25)
-            score_unico -= penalidade
+            penalidade = min(50, (excesso - 1.3) * 30)
+            score -= penalidade
     
+        ranking.append({
+            "Veículo": veic["Veículo"],
+            "Status": "Viável",
+            "Motivo": "",
+            "Aproveitamento (%)": round(aproveitamento_vol, 2),
+            "Aproveitamento Peso (%)": round(aproveitamento_peso, 2),
+            "Score": round(score, 2)
+        })
     
-    # melhor cenário MULTI
-    score_multi = -1
+    df_rank = pd.DataFrame(ranking)
     
-    if not df_multi.empty:
-        score_multi = df_multi.iloc[0]["Score"]
+    # ✅ ordena ranking
+    if not df_rank.empty:
+        df_rank = df_rank.sort_values(by="Score", ascending=False).reset_index(drop=True)
     
-    # ==========================================
-    # ✅ DECISÃO FINAL
-    # ==========================================
+    # ✅ fallback MULTI
+    if df_rank.empty:
+        if not df_multi.empty:
+            return df_multi, {"cenario": "MULTI"}
+        return pd.DataFrame(), {"cenario": None}
     
-    # ✅ prioriza MULTI se necessário
-    if veic_unico is None or score_unico < 45:
+    # ✅ se score baixo → MULTI
+    if df_rank.iloc[0]["Score"] < 45:
         if not df_multi.empty:
             return df_multi, {"cenario": "MULTI"}
     
-    # ✅ cenário de veículo único
-    if veic_unico is not None:
-        return pd.DataFrame([{
-            "Veículo": veic_info["Veículo"],
-            "Status": "Viável",
-            "Motivo": "Melhor cenário geral (veículo único)",
-            "Aproveitamento (%)": round((valor_total / capacidade_max) * 100, 2),
-            "Aproveitamento Peso (%)": round((peso_total / veic_info["peso_max"]) * 100, 2),
-            "Score": round(score_unico, 2)
-        }]), {"cenario": "UNICO"}
-    
-    # ✅ fallback MULTI
-    if not df_multi.empty:
-        return df_multi, {"cenario": "MULTI"}
-    
-    # ✅ fallback final
-    return pd.DataFrame(), {"cenario": None}
+    # ✅ retorna ranking final
+    return df_rank, {"cenario": "RANKING"}
+
 
 
 # ============================
@@ -1238,8 +1236,8 @@ if st.button("🚀 Calcular Dimensionamento", disabled=not st.session_state.carg
         st.session_state.cenario = meta.get("cenario")
 
     # feedback básico
-    if st.session_state.cenario == "UNICO":
-        st.success("✅ Um único veículo atende 100% da carga.")
+    if st.session_state.cenario == "RANKING":
+        st.success("✅ Melhor veículo identificado com base em eficiência.")
     elif st.session_state.cenario == "MULTI":
         st.warning("⚠ Planejamento com múltiplos veículos necessário.")
     else:
@@ -1260,7 +1258,7 @@ if (
     # ----------------------------
     # 🚚 CENÁRIO: VEÍCULO ÚNICO
     # ----------------------------
-    if st.session_state.cenario == "UNICO":
+    if st.session_state.cenario in ["UNICO", "RANKING"]:
     
         st.subheader("🏆 Ranking de Veículos Viáveis")
     
