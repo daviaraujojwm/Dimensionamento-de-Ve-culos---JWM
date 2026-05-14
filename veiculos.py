@@ -1328,7 +1328,7 @@ if (
         
         nome_veiculo = melhor_row["Veículo"]
         
-        # ✅ COMBO INTELIGENTE (USA OS DOIS VEÍCULOS)
+        # ✅ COMBO INTELIGENTE
         if " + " in nome_veiculo:
             partes = nome_veiculo.split(" + ")
         
@@ -1338,7 +1338,7 @@ if (
                 st.warning("⚠ Veículos do combo não encontrados.")
                 st.stop()
         
-            # 🔥 soma capacidades dos veículos
+            # 🔥 soma capacidades
             largura = df_parte["largura"].max()
             comprimento = df_parte["comprimento"].sum()
             altura = df_parte["altura"].max()
@@ -1351,7 +1351,7 @@ if (
                 "peso_max": peso_max
             }
         
-        # ✅ VEÍCULO ÚNICO NORMAL
+        # ✅ VEÍCULO NORMAL
         else:
             filtro = df_veiculos[df_veiculos["Veículo"] == nome_veiculo]
         
@@ -1427,7 +1427,31 @@ if st.button("🔍 Simular Empilhamento 3D"):
         
     # Veículo vencedor
     melhor_veiculo = st.session_state.df_result.iloc[0]["Veículo"]
-    veic = df_veiculos[df_veiculos["Veículo"] == melhor_veiculo].iloc[0]
+    
+    # ✅ TRATAMENTO DE COMBO
+    if " + " in melhor_veiculo:
+    
+        partes = melhor_veiculo.split(" + ")
+    
+        df_parte = df_veiculos[df_veiculos["Veículo"].isin(partes)]
+    
+        if df_parte.empty:
+            st.error("Erro ao carregar veículos do combo.")
+            st.stop()
+    
+        # 🔥 cria veículo combinado
+        veic = {
+            "largura": df_parte["largura"].max(),
+            "comprimento": df_parte["comprimento"].sum(),
+            "altura": df_parte["altura"].max(),
+            "peso_max": df_parte["peso_max"].sum()
+        }
+    
+    # ✅ VEÍCULO NORMAL
+    else:
+        veic = df_veiculos[
+            df_veiculos["Veículo"] == melhor_veiculo
+        ].iloc[0]
 
     # Quantidade real de caixas
     qtd_total_real = sum(c["Quantidade"] for c in st.session_state.cargas)
