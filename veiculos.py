@@ -909,6 +909,10 @@ def escolher_veiculo_unico_completo(cargas_unit, df_veiculos):
     
         peso_max = veic["peso_max"]
     
+        # 🔴 BLOQUEIO CRÍTICO — evita veículo grande demais
+        if capacidade_max > valor_total * 2:
+            continue
+        
         if (
             valor_total <= capacidade_max
             and peso_total <= peso_max
@@ -917,6 +921,7 @@ def escolher_veiculo_unico_completo(cargas_unit, df_veiculos):
             and max_alt <= veic["altura"]
         ):
             return veic
+
     
     return None
 
@@ -1093,6 +1098,10 @@ def executar_calculo(cargas, df_veiculos, selecionados):
         else:
             capacidade_max = veic["largura"] * veic["comprimento"]
         
+        # 🔴 BLOQUEIO GLOBAL
+        if capacidade_max > valor_total * 2:
+            continue
+        
         if status == "Viável":
         
             if peso_total > peso_max:
@@ -1184,10 +1193,6 @@ def executar_calculo(cargas, df_veiculos, selecionados):
             ((100 - abs(aproveitamento_vol_pct - aproveitamento_peso_pct)) * 0.15)
         )
         
-        # ✅ AJUSTE CRÍTICO — penaliza veículo grande
-        if capacidade_max > valor_total * 2:
-            score_unico *= 0.5
-    
     # pega melhor MULTI
     score_multi = -1
     
