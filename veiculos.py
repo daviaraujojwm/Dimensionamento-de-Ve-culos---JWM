@@ -1032,8 +1032,9 @@ def calcular_multi_veiculos(cargas, df_veiculos):
     # 🚛 MULTI fragmentado respeitando bloqueio
     veiculos_ordenados = df_multi.sort_values(
         by="Capacidade Volume (m³)",
-        ascending=False
+        ascending=True
     )
+
 
     resultado = []
     cargas_restantes = cargas_unit.copy()
