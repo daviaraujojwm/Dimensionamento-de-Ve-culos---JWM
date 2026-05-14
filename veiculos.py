@@ -909,14 +909,19 @@ def escolher_veiculo_unico_completo(cargas_unit, df_veiculos):
     
         peso_max = veic["peso_max"]
     
-        # ✅ exceção para carga muito pequena
-        if valor_total < 1:  # menos de 1 m³
-            pass  # não filtra veículos pequenos
-        else:
+        # ✅ regra inteligente por faixa de carga
+        if valor_total < 1:
+            pass
+        elif valor_total <= 30:
             if capacidade_max > valor_total * 1.5:
                 continue
+        elif valor_total <= 100:
+            if capacidade_max > valor_total * 2:
+                continue
+        else:
+            if capacidade_max > valor_total * 3:
+                continue
 
-        
         if (
             valor_total <= capacidade_max
             and peso_total <= peso_max
@@ -1102,12 +1107,17 @@ def executar_calculo(cargas, df_veiculos, selecionados):
         else:
             capacidade_max = veic["largura"] * veic["comprimento"]
         
-        # 🔴 BLOQUEIO GLOBAL
-        # ✅ exceção para carga pequena
+        # ✅ regra inteligente por faixa (IGUAL ao outro lugar)
         if valor_total < 1:
             pass
-        else:
+        elif valor_total <= 30:
             if capacidade_max > valor_total * 1.5:
+                continue
+        elif valor_total <= 100:
+            if capacidade_max > valor_total * 2:
+                continue
+        else:
+            if capacidade_max > valor_total * 3:
                 continue
         
         if status == "Viável":
@@ -1129,44 +1139,19 @@ def executar_calculo(cargas, df_veiculos, selecionados):
         })
 
     df_status = pd.DataFrame(registros)
+    df_viaveis = df_status[df_status["Status"] == "Viável"]
     
     # ✅ proteção total
     if df_status.empty:
+        df_multi = gerar_cenarios_multi(cargas, df_veiculos, empilhavel)
+    
+        if not df_multi.empty:
+            return df_multi, {"cenario": "MULTI"}
+    
         return pd.DataFrame([{
             "Veículo": "Nenhum",
             "Status": "Inviável",
-            "Motivo": "Nenhum veículo atende critérios após filtros",
-            "Aproveitamento (%)": 0,
-            "Aproveitamento Peso (%)": 0,
-            "Score": 0
-        }]), {"cenario": None}
-    
-    if "Status" not in df_status.columns:
-        df_viaveis = pd.DataFrame()
-    else:
-        df_viaveis = df_status[df_status["Status"] == "Viável"]
-
-    # ==========================================
-    # ✅ 1. BLOQUEIO DE CARGA IMPOSSÍVEL (TESTE 8)
-    # ==========================================
-    
-    max_comp_global = max(c["Comprimento (m)"] for c in cargas)
-    max_larg_global = max(c["Largura (m)"] for c in cargas)
-    max_alt_global  = max(c["Altura (m)"] for c in cargas)
-    
-    max_comp_veic = df_veiculos["comprimento"].max()
-    max_larg_veic = df_veiculos["largura"].max()
-    max_alt_veic  = df_veiculos["altura"].max()
-    
-    if (
-        max_comp_global > max_comp_veic
-        or max_larg_global > max_larg_veic
-        or max_alt_global > max_alt_veic
-    ):
-        return pd.DataFrame([{
-            "Veículo": "Nenhum",
-            "Status": "Inviável",
-            "Motivo": "Carga excede dimensões máximas de todos os veículos",
+            "Motivo": "Nenhum veículo atende critérios",
             "Aproveitamento (%)": 0,
             "Aproveitamento Peso (%)": 0,
             "Score": 0
@@ -1245,7 +1230,7 @@ def executar_calculo(cargas, df_veiculos, selecionados):
     ranking = []
     
     for _, row in df_viaveis.iterrows():
-    
+
         # 🔧 pega dados do veículo
         veic_info = df_veiculos[df_veiculos["Veículo"] == row["Veículo"]].iloc[0]
     
@@ -1267,11 +1252,14 @@ def executar_calculo(cargas, df_veiculos, selecionados):
             row["Peso Máx"]
         )
         
+        # 🔥 penalização forte para veículo superdimensionado
+        if capacidade_max > valor_total * 1.3:
+            excesso = capacidade_max / valor_total
+            penalidade = min(40, (excesso - 1.3) * 25)
+            score -= penalidade
+                
         # ✅ NOVO: penalização por veículo grande (ESSENCIAL)
         volume_veiculo = veic_info["Capacidade Volume (m³)"]
-        
-        if valor_total < volume_veiculo * 0.4:
-            score -= 25
         
         # ===============================
         # DESEMPATE OPERACIONAL
