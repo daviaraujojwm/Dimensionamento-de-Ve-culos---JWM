@@ -910,7 +910,7 @@ def escolher_veiculo_unico_completo(cargas_unit, df_veiculos):
         peso_max = veic["peso_max"]
     
         # 🔴 BLOQUEIO CRÍTICO — evita veículo grande demais
-        if capacidade_max > valor_total * 2:
+        if capacidade_max > valor_total * 1.5:
             continue
         
         if (
@@ -1121,8 +1121,23 @@ def executar_calculo(cargas, df_veiculos, selecionados):
         })
 
     df_status = pd.DataFrame(registros)
-    df_viaveis = df_status[df_status["Status"] == "Viável"]
     
+    # ✅ proteção total
+    if df_status.empty:
+        return pd.DataFrame([{
+            "Veículo": "Nenhum",
+            "Status": "Inviável",
+            "Motivo": "Nenhum veículo atende critérios após filtros",
+            "Aproveitamento (%)": 0,
+            "Aproveitamento Peso (%)": 0,
+            "Score": 0
+        }]), {"cenario": None}
+    
+    if "Status" not in df_status.columns:
+        df_viaveis = pd.DataFrame()
+    else:
+        df_viaveis = df_status[df_status["Status"] == "Viável"]
+
     # ==========================================
     # ✅ 1. BLOQUEIO DE CARGA IMPOSSÍVEL (TESTE 8)
     # ==========================================
@@ -1275,6 +1290,10 @@ def executar_calculo(cargas, df_veiculos, selecionados):
             "Score": round(score_final, 2)
         })
 
+    # ✅ proteção antes do merge
+    if not ranking:
+        return pd.DataFrame(), {"cenario": None}
+    
     df_rank = (
         pd.DataFrame(ranking)
         .merge(
