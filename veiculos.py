@@ -1026,14 +1026,6 @@ def calcular_multi_veiculos(cargas, df_veiculos):
         ascending=True
     )
 
-
-    # 🚛 MULTI fragmentado respeitando bloqueio
-    veiculos_ordenados = df_multi.sort_values(
-        by="Capacidade Volume (m³)",
-        ascending=True
-    )
-
-
     resultado = []
     cargas_restantes = cargas_unit.copy()
 
@@ -1108,29 +1100,29 @@ def calcular_multi_veiculos(cargas, df_veiculos):
         alocou_algum = False
 
         for _, veic in veiculos_ordenados.iterrows():
-
+        
             if not cargas_restantes:
                 break
-
+        
             comp_v = veic["comprimento"]
             larg_v = veic["largura"]
             alt_v = veic["altura"]
             peso_max = veic["peso_max"]
-
+        
             alocadas = []
             peso_total = 0
             volume_ocupado = 0
             novas_restantes = []
-
+        
             for carga in cargas_restantes:
-            
+        
                 if empilhavel:
                     valor_carga = carga["volume"]
                     capacidade_veic = comp_v * larg_v * alt_v
                 else:
                     valor_carga = carga["comp"] * carga["larg"]
                     capacidade_veic = comp_v * larg_v
-            
+        
                 if excede_capacidade(
                     peso_total,
                     volume_ocupado,
@@ -1141,30 +1133,43 @@ def calcular_multi_veiculos(cargas, df_veiculos):
                 ):
                     novas_restantes.append(carga)
                     continue
-                    
+        
                 cabe = cabe_no_piso_heuristica(
                     alocadas + [carga],
                     comp_v,
                     larg_v,
                     alt_v
                 )
-
+        
                 if cabe:
                     alocadas.append(carga)
                     peso_total += carga["peso"]
                     volume_ocupado += valor_carga
-                    alocou_algum = True
                 else:
                     novas_restantes.append(carga)
-
+        
+            # ✅ ✅ ✅ ESTA LINHA TEM QUE FICAR AQUI (DENTRO DO FOR)
             if alocadas:
-                resultado.append({
-                    "Veículo": veic["Veículo"],
-                    "Qtd Caixas": len(alocadas),
-                    "Peso Total (kg)": round(peso_total, 2)
-                })
+        
+                existente = next(
+                    (r for r in resultado if r["Veículo"] == veic["Veículo"]),
+                    None
+                )
+        
+                if existente:
+                    existente["Qtd Caixas"] += len(alocadas)
+                    existente["Peso Total (kg)"] += round(peso_total, 2)
+                else:
+                    resultado.append({
+                        "Veículo": veic["Veículo"],
+                        "Qtd Caixas": len(alocadas),
+                        "Peso Total (kg)": round(peso_total, 2)
+                    })
+        
+                cargas_restantes = novas_restantes
+        
+                break  # ✅ CRÍTICO
 
-            cargas_restantes = novas_restantes
 
         if not alocou_algum:
             break
