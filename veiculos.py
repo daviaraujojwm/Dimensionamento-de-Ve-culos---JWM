@@ -909,9 +909,13 @@ def escolher_veiculo_unico_completo(cargas_unit, df_veiculos):
     
         peso_max = veic["peso_max"]
     
-        # 🔴 BLOQUEIO CRÍTICO — evita veículo grande demais
-        if capacidade_max > valor_total * 1.5:
-            continue
+        # ✅ exceção para carga muito pequena
+        if valor_total < 1:  # menos de 1 m³
+            pass  # não filtra veículos pequenos
+        else:
+            if capacidade_max > valor_total * 1.5:
+                continue
+
         
         if (
             valor_total <= capacidade_max
