@@ -1249,14 +1249,15 @@ def executar_calculo(cargas, df_veiculos, selecionados):
                     if score > melhor_score:
                         melhor_score = score
                         melhor_combo = {
-                            "Veículo": f'{v1["Veículo"]} + {v2["Veículo"]}',
+                            "Veículo": f'{v1["Veículo"]} + {v2["Veículo"]}',  # ✅ vírgula aqui
                             "Status": "Viável",
-                            "Cenário": "COMBO"
                             "Motivo": "Fallback automático",
+                            "Cenário": "COMBO",
                             "Aproveitamento (%)": round(aproveitamento_vol, 2),
                             "Aproveitamento Peso (%)": round(aproveitamento_peso, 2),
                             "Score": round(score, 2)
                         }
+
         
             # ✅ cria dataframe com fallback
             if melhor_combo:
