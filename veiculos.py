@@ -895,7 +895,7 @@ def escolher_veiculo_unico_completo(cargas_unit, df_veiculos):
     # Menor veículo primeiro
     veiculos_ordenados = df_veiculos.sort_values(
         by="Capacidade Volume (m³)",
-        ascending=False
+        ascending=True
     )
 
     for _, veic in veiculos_ordenados.iterrows():
@@ -955,14 +955,8 @@ def gerar_cenarios_multi(cargas, df_veiculos, empilhavel=True, max_opcoes=5):
 
     EFICIENCIA = 0.85
 
-    # ============================
-    # EXPANSÃO DAS CARGAS
-    # ============================
     cargas_unit = expand_cargas_unitarias(cargas)
 
-    # ============================
-    # TOTAIS
-    # ============================
     if empilhavel:
         volume_total = sum(c["volume"] for c in cargas_unit)
     else:
@@ -972,70 +966,53 @@ def gerar_cenarios_multi(cargas, df_veiculos, empilhavel=True, max_opcoes=5):
 
     cenarios = []
 
-    # ============================
-    # ORDENA VEÍCULOS (MENOR → MAIOR)
-    # ============================
     veiculos_ordenados = df_veiculos.sort_values(
         by="Capacidade Volume (m³)"
     )
 
-    # ============================
-    # LOOP PRINCIPAL
-    # ============================
     for _, veic in veiculos_ordenados.iterrows():
 
-        # ✅ capacidade com eficiência real
         if empilhavel:
             cap_vol = (
-                veic["largura"] * veic["comprimento"] * veic["altura"]
+                veic["largura"]
+                * veic["comprimento"]
+                * veic["altura"]
             )
         else:
             cap_vol = (
-                veic["largura"] * veic["comprimento"]
+                veic["largura"]
+                * veic["comprimento"]
             )
 
         cap_vol *= EFICIENCIA
         cap_peso = veic["peso_max"]
 
-        # ============================
-        # CÁLCULO DE QUANTIDADE
-        # ============================
         qtd = int(max(
             volume_total / cap_vol,
             peso_total / cap_peso
         ) + 0.999)
-        
+
         if qtd <= 0:
             continue
-        
-        # 🔴 muitos veículos → descarta
+
         if qtd > 10:
             continue
-        
-        # ✅ agora sim calcula aproveitamento
+
         aproveitamento_vol = volume_total / (cap_vol * qtd)
         aproveitamento_peso = peso_total / (cap_peso * qtd)
 
-        
-        # 🔴 pouco aproveitamento → descarta
         if aproveitamento_vol < 0.6:
             continue
-        
-        # 🔴 veículo muito grande (VOLUME)
+
         if cap_vol > volume_total * 2:
             continue
-        
-        # 🔴 evita veículo gigante para carga pequena
+
         if volume_total < cap_vol * 0.3:
             continue
-        
-        # 🔴 evita veículo exagerado no peso
+
         if cap_peso > peso_total * 5:
             continue
 
-        # ============================
-        # SCORE INTELIGENTE
-        # ============================
         score = (
             (1 / qtd) * 60 +
             (aproveitamento_vol * 25) +
@@ -1050,16 +1027,38 @@ def gerar_cenarios_multi(cargas, df_veiculos, empilhavel=True, max_opcoes=5):
             "Score": round(score, 2)
         })
 
-    # ============================
-    # ORGANIZA RESULTADO
-    # ============================
     df = pd.DataFrame(cenarios)
 
     if not df.empty:
-        df = df.sort_values(by="Score", ascending=False)
+        df = df.sort_values(
+            by="Score",
+            ascending=False
+        )
 
     return df.head(max_opcoes)
-        
+
+
+# =====================================
+# NOVA FUNÇÃO (ESTAVA FALTANDO)
+# =====================================
+def dividir_carga_multi(cargas, df_veiculos, empilhavel=True):
+
+    df_multi = gerar_cenarios_multi(
+        cargas,
+        df_veiculos,
+        empilhavel
+    )
+
+    if df_multi.empty:
+        return pd.DataFrame()
+
+    df_multi["Status"] = "Viável"
+    df_multi["Motivo"] = "Distribuição multi-veículo"
+    df_multi["Cenário"] = "MULTI"
+
+    return df_multi
+
+
 def executar_calculo(cargas, df_veiculos, selecionados):
     """
     Função central do sistema.
@@ -1258,7 +1257,7 @@ def executar_calculo(cargas, df_veiculos, selecionados):
                 peso_cap = v1["peso_max"] + v2["peso_max"]
     
                 if valor_total > cap_total:
-                    pass
+                    continue
 
                 if peso_total > peso_cap * 1.3:
                     continue
@@ -1315,7 +1314,7 @@ def executar_calculo(cargas, df_veiculos, selecionados):
                     peso_cap = v1["peso_max"] + v2["peso_max"]
         
                     if valor_total > cap_total:
-                        pass
+                        continue
                     if peso_total > peso_cap * 1.5:
                         continue
         
@@ -1635,7 +1634,7 @@ if st.button("🔍 Simular Empilhamento 3D"):
     fig = go.Figure()
     cores = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728"]
 
-    for i, (x, y, z, c, l, a) in enumerate(posicoes):
+    for i, (x, y, z, c, l, a) in enumerate(posicoes[:150]):
         fig.add_trace(go.Mesh3d(
             x=[x, x+c, x+c, x, x, x+c, x+c, x],
             y=[y, y, y+l, y+l, y, y, y+l, y+l],
