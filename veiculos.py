@@ -1277,11 +1277,25 @@ def executar_calculo(cargas, df_veiculos, selecionados):
 
         peso_max = veic["peso_max"]
 
-        if peso_total > peso_max:
-            continue
-        if valor_total > capacidade_max:
-            continue
-
+        excede_peso = peso_total > peso_max
+        excede_volume = valor_total > capacidade_max
+        
+        aproveitamento_vol = valor_total / capacidade_max * 100
+        aproveitamento_peso = peso_total / peso_max * 100
+        
+        penalidade = 0
+        
+        if excede_peso:
+            penalidade += 50
+        
+        if excede_volume:
+            penalidade += 50
+        
+        score = (
+            (aproveitamento_vol * 0.55)
+            + (aproveitamento_peso * 0.30)
+            + ((100 - abs(aproveitamento_vol - aproveitamento_peso)) * 0.15)
+        ) - penalidade
         aproveitamento_vol = valor_total / capacidade_max * 100
         aproveitamento_peso = peso_total / peso_max * 100
 
