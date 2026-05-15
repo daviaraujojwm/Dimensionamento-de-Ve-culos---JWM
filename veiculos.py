@@ -1184,9 +1184,9 @@ def executar_calculo(cargas, df_veiculos, selecionados):
     
                 aproveitamento_vol = valor_total / cap_total * 100
                 aproveitamento_peso = peso_total / peso_cap * 100
-                
+
                 # 🔥 FILTRO DE QUALIDADE (AQUI)
-                if aproveitamento_vol < 50:
+                if aproveitamento_vol < 30:
                     continue
                 
                 score = (
@@ -1346,35 +1346,47 @@ def executar_calculo(cargas, df_veiculos, selecionados):
 
         df_rank = pd.DataFrame(fallback_rank)
 
-    # ✅ junta combo
-    df_combo = gerar_combinacoes(df_testar, valor_total, peso_total)
-    
-    if not df_combo.empty:
-        df_combo["Cenário"] = "COMBO"
-        df_rank = pd.concat([df_rank, df_combo], ignore_index=True)
-    
-    # ✅ 1 - tentar veículos viáveis
+    # ✅ 1 — VEÍCULOS ÚNICOS (RANKING)
     df_filtrado = df_rank[df_rank["Status"] == "Viável"]
     
     if not df_filtrado.empty:
-        df_rank = df_filtrado
     
-    # ✅ 2 - se não tiver viável → usa combo
-    elif "Cenário" in df_rank.columns:
-        df_combo_only = df_rank[df_rank["Cenário"] == "COMBO"]
-        
-        if not df_combo_only.empty:
-            df_rank = df_combo_only
+        df_rank = df_filtrado.copy()
     
-    # ✅ 3 - se ainda vazio → usa ranking limitado (fallback)
-    if df_rank.empty:
-        df_rank = pd.DataFrame(ranking)
+        df_rank = df_rank.sort_values(
+            by="Score",
+            ascending=False
+        ).reset_index(drop=True)
     
-    # ✅ ordenação final
+        return df_rank, {"cenario": "RANKING"}
+    
+    
+    # ✅ 2 — MULTI VEÍCULO (COMBO)
+    df_multi = gerar_combinacoes(df_testar, valor_total, peso_total)
+    
+    if not df_multi.empty:
+    
+        df_multi["Cenário"] = "COMBO"
+    
+        df_multi = df_multi.sort_values(
+            by="Score",
+            ascending=False
+        ).reset_index(drop=True)
+    
+        return df_multi, {"cenario": "MULTI"}
+    
+    
+    # ✅ 3 — FALLBACK (nunca ficar vazio)
+    df_rank = pd.DataFrame(ranking)
+    
     if not df_rank.empty:
-        df_rank = df_rank.sort_values(by="Score", ascending=False).reset_index(drop=True)
+        df_rank = df_rank.sort_values(
+            by="Score",
+            ascending=False
+        ).reset_index(drop=True)
     
     return df_rank, {"cenario": "RANKING"}
+
 # ============================
 # 🚀 BOTÃO CALCULAR
 # ============================
