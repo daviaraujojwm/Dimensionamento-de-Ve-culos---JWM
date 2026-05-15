@@ -1197,13 +1197,13 @@ def executar_calculo(cargas, df_veiculos, selecionados):
                 
                 combos.append({
                     "Veículo": f'{v1["Veículo"]} + {v2["Veículo"]}',
-                    "Status": "Combo",
-                    "Motivo": "Combinação otimizada",
+                    "Status": "Viável",  # ✅ MUDOU AQUI
+                    "Motivo": "Combo otimizado",
+                    "Cenário": "COMBO",
                     "Aproveitamento (%)": round(aproveitamento_vol, 2),
                     "Aproveitamento Peso (%)": round(aproveitamento_peso, 2),
                     "Score": round(score, 2)
                 })
-    
         df = pd.DataFrame(combos)
         
         # ✅ se encontrou combo válido
@@ -1302,6 +1302,7 @@ def executar_calculo(cargas, df_veiculos, selecionados):
             "Veículo": veic["Veículo"],
             "Status": "Limitado" if (excede_peso or excede_volume) else "Viável",
             "Motivo": "Excede capacidade" if (excede_peso or excede_volume) else "",
+            "Cenário": "RANKING",
             "Aproveitamento (%)": round(aproveitamento_vol, 2),
             "Aproveitamento Peso (%)": round(aproveitamento_peso, 2),
             "Score": round(score, 2)
@@ -1343,17 +1344,25 @@ def executar_calculo(cargas, df_veiculos, selecionados):
 
         df_rank = pd.DataFrame(fallback_rank)
 
-    # ✅ FORA do if (IMPORTANTÍSSIMO)
+    # ✅ junta combo
     df_combo = gerar_combinacoes(df_testar, valor_total, peso_total)
-
+    
     if not df_combo.empty:
+        df_combo["Cenário"] = "COMBO"
         df_rank = pd.concat([df_rank, df_combo], ignore_index=True)
-
+    
+    # ✅ FILTRAR SOMENTE VEÍCULOS QUE FECHAM 100%
+    df_filtrado = df_rank[df_rank["Status"] == "Viável"]
+    
+    # ✅ se existir veículo viável → usa só eles
+    if not df_filtrado.empty:
+        df_rank = df_filtrado
+    
+    # ✅ ordena ranking final
     if not df_rank.empty:
         df_rank = df_rank.sort_values(by="Score", ascending=False).reset_index(drop=True)
-
+    
     return df_rank, {"cenario": "RANKING"}
-
 # ============================
 # 🚀 BOTÃO CALCULAR
 # ============================
