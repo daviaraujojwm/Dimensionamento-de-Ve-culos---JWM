@@ -1307,23 +1307,56 @@ def executar_calculo(cargas, df_veiculos, selecionados):
         })
 
 
-    df_rank = pd.DataFrame(ranking)
-    
-    # 🔥 fallback final se ranking vazio
-    if df_rank.empty:
-        df_rank = df_status.copy()
+df_rank = pd.DataFrame(ranking)
 
+# ✅ fallback final CORRETO
+if df_rank.empty:
 
-    # ✅ junta combo
-    df_combo = gerar_combinacoes(df_testar, valor_total, peso_total)
+    fallback_rank = []
 
-    if not df_combo.empty:
-        df_rank = pd.concat([df_rank, df_combo], ignore_index=True)
+    for _, veic in df_testar.iterrows():
 
-    if not df_rank.empty:
-        df_rank = df_rank.sort_values(by="Score", ascending=False).reset_index(drop=True)
+        if empilhavel:
+            capacidade_max = veic["largura"] * veic["comprimento"] * veic["altura"]
+        else:
+            capacidade_max = veic["largura"] * veic["comprimento"]
 
-    return df_rank, {"cenario": "RANKING"}
+        peso_max = veic["peso_max"]
+
+        aproveitamento_vol = valor_total / capacidade_max * 100
+        aproveitamento_peso = peso_total / peso_max * 100
+
+        score = (
+            (aproveitamento_vol * 0.55)
+            + (aproveitamento_peso * 0.30)
+            + ((100 - abs(aproveitamento_vol - aproveitamento_peso)) * 0.15)
+        )
+
+        fallback_rank.append({
+            "Veículo": veic["Veículo"],
+            "Status": "Fallback",
+            "Motivo": "Sem veículo ideal",
+            "Aproveitamento (%)": round(aproveitamento_vol, 2),
+            "Aproveitamento Peso (%)": round(aproveitamento_peso, 2),
+            "Score": round(score, 2)
+        })
+
+    df_rank = pd.DataFrame(fallback_rank)
+
+# ✅ 🔥 FORA DO IF (ESSA PARTE TEM QUE FICAR FORA)
+
+# junta combo SEMPRE
+df_combo = gerar_combinacoes(df_testar, valor_total, peso_total)
+
+if not df_combo.empty:
+    df_rank = pd.concat([df_rank, df_combo], ignore_index=True)
+
+# ordena SEMPRE
+if not df_rank.empty:
+    df_rank = df_rank.sort_values(by="Score", ascending=False).reset_index(drop=True)
+
+return df_rank, {"cenario": "RANKING"}
+
 # ============================
 # 🚀 BOTÃO CALCULAR
 # ============================
