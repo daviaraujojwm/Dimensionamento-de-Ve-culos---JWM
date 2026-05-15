@@ -1353,18 +1353,24 @@ def executar_calculo(cargas, df_veiculos, selecionados):
         df_combo["Cenário"] = "COMBO"
         df_rank = pd.concat([df_rank, df_combo], ignore_index=True)
     
-    # ✅ FILTRAR SOMENTE VEÍCULOS QUE FECHAM 100%
+    # ✅ 1 - tentar veículos viáveis
     df_filtrado = df_rank[df_rank["Status"] == "Viável"]
     
-    # ✅ prioridade: veículos que fecham 100%
     if not df_filtrado.empty:
         df_rank = df_filtrado
     
-    # ✅ se NÃO tiver veículo viável → usar combo
-    else:
-        df_rank = df_rank[df_rank["Cenário"] == "COMBO"]
+    # ✅ 2 - se não tiver viável → usa combo
+    elif "Cenário" in df_rank.columns:
+        df_combo_only = df_rank[df_rank["Cenário"] == "COMBO"]
+        
+        if not df_combo_only.empty:
+            df_rank = df_combo_only
     
-    # ✅ ordena ranking final
+    # ✅ 3 - se ainda vazio → usa ranking limitado (fallback)
+    if df_rank.empty:
+        df_rank = pd.DataFrame(ranking)
+    
+    # ✅ ordenação final
     if not df_rank.empty:
         df_rank = df_rank.sort_values(by="Score", ascending=False).reset_index(drop=True)
     
