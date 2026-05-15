@@ -1250,7 +1250,8 @@ def executar_calculo(cargas, df_veiculos, selecionados):
                         melhor_score = score
                         melhor_combo = {
                             "Veículo": f'{v1["Veículo"]} + {v2["Veículo"]}',
-                            "Status": "Combo",
+                            "Status": "Viável",
+                            "Cenário": "COMBO"
                             "Motivo": "Fallback automático",
                             "Aproveitamento (%)": round(aproveitamento_vol, 2),
                             "Aproveitamento Peso (%)": round(aproveitamento_peso, 2),
