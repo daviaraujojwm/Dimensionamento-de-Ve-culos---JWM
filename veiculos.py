@@ -1001,7 +1001,7 @@ def gerar_cenarios_multi(cargas, df_veiculos, empilhavel=True, max_opcoes=5):
         aproveitamento_vol = volume_total / (cap_vol * qtd)
         aproveitamento_peso = peso_total / (cap_peso * qtd)
 
-        if aproveitamento_vol < 0.6:
+        if aproveitamento_vol < 0.1: # Reduzido de 0.6 para 0.1 para ser mais flexível
             continue
 
         if cap_vol > volume_total * 2:
@@ -1102,18 +1102,18 @@ def executar_calculo(cargas, df_veiculos, selecionados):
         status = "Viável"
         motivo = ""
     
-        # 🚫 REGRAS FÍSICAS ELIMINATÓRIAS (DIMENSÕES)
+        # 🚫 REGRAS FÍSICAS (Agora apenas marcam como 'Limitado' em vez de remover totalmente do cálculo inicial)
         if max_larg > veic["largura"]:
             status = "Inviável"
-            motivo = "Largura da carga excede o veículo"
+            motivo = "Largura excede"
         
         elif max_comp > veic["comprimento"]:
             status = "Inviável"
-            motivo = "Comprimento da carga excede o veículo"
+            motivo = "Comprimento excede"
         
         elif max_alt > veic["altura"]:
             status = "Inviável"
-            motivo = "Altura da carga excede o veículo"
+            motivo = "Altura excede"
     
         # 🚫 REGRAS OPERACIONAIS (PESO / CAPACIDADE)
         
@@ -1127,14 +1127,18 @@ def executar_calculo(cargas, df_veiculos, selecionados):
         pass
         
         if status == "Viável":
-        
             if peso_total > peso_max:
                 status = "Inviável"
                 motivo = "Excede peso"
-        
             elif valor_total > capacidade_max:
                 status = "Inviável"
                 motivo = "Excede capacidade"
+        elif status == "Inviável":
+            # Se já era inviável por dimensão, mantemos, mas garantimos que o peso/capacidade também sejam checados
+            if peso_total > peso_max:
+                motivo += " + Peso"
+            if valor_total > capacidade_max:
+                motivo += " + Capacidade"
         
         registros.append({
             "Veículo": veic["Veículo"],
@@ -1459,13 +1463,18 @@ def executar_calculo(cargas, df_veiculos, selecionados):
     
     
     # ✅ 3 — FALLBACK (nunca ficar vazio)
-    df_rank = pd.DataFrame(ranking)
+    # Se chegamos aqui, significa que não houve veículo "Viável" 100%
+    # Vamos retornar todos os veículos testados para que o usuário veja o motivo da inviabilidade
+    df_rank = pd.DataFrame(registros)
     
-    if not df_rank.empty:
-        df_rank = df_rank.sort_values(
-            by="Score",
-            ascending=False
-        ).reset_index(drop=True)
+    # Adicionamos colunas de aproveitamento para o usuário ver o quão longe está
+    df_rank["Aproveitamento (%)"] = (valor_total / (df_rank["Volume Máx"])) * 100
+    df_rank["Aproveitamento Peso (%)"] = (peso_total / df_rank["Peso Máx"]) * 100
+    
+    # Calcula um score simplificado para ordenar os "menos piores" primeiro
+    df_rank["Score"] = (df_rank["Aproveitamento (%)"] * 0.5) + (df_rank["Aproveitamento Peso (%)"] * 0.5)
+    
+    df_rank = df_rank.sort_values(by="Score", ascending=False).reset_index(drop=True)
     
     return df_rank, {"cenario": "RANKING"}
 
