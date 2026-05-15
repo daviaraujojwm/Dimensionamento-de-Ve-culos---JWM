@@ -1296,30 +1296,22 @@ def executar_calculo(cargas, df_veiculos, selecionados):
             + (aproveitamento_peso * 0.30)
             + ((100 - abs(aproveitamento_vol - aproveitamento_peso)) * 0.15)
         ) - penalidade
-        aproveitamento_vol = valor_total / capacidade_max * 100
-        aproveitamento_peso = peso_total / peso_max * 100
-
-        score = (
-            (aproveitamento_vol * 0.55)
-            + (aproveitamento_peso * 0.30)
-            + ((100 - abs(aproveitamento_vol - aproveitamento_peso)) * 0.15)
-        )
-
+        
         ranking.append({
             "Veículo": veic["Veículo"],
-            "Status": "Viável",
-            "Motivo": "",
+            "Status": "Limitado" if (excede_peso or excede_volume) else "Viável",
+            "Motivo": "Excede capacidade" if (excede_peso or excede_volume) else "",
             "Aproveitamento (%)": round(aproveitamento_vol, 2),
             "Aproveitamento Peso (%)": round(aproveitamento_peso, 2),
             "Score": round(score, 2)
         })
+
 
     df_rank = pd.DataFrame(ranking)
     
     # 🔥 fallback final se ranking vazio
     if df_rank.empty:
         df_rank = df_status.copy()
-        df_rank = df_rank[df_rank["Status"] == "Viável"]
 
 
     # ✅ junta combo
