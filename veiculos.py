@@ -1205,13 +1205,16 @@ def executar_calculo(cargas, df_veiculos, selecionados):
                 })
     
         df = pd.DataFrame(combos)
-    
+        
+        # ✅ se encontrou combo válido
         if not df.empty:
             df = df.sort_values(by="Score", ascending=False).head(1)
-        else:
-            # 🔥 fallback SEM filtro
         
-            fallback = []
+        # 🔥 se NÃO encontrou (fallback automático)
+        else:
+        
+            melhor_combo = None
+            melhor_score = float("-inf")
         
             for i, v1 in df_testar.iterrows():
                 for j, v2 in df_testar.iterrows():
@@ -1243,20 +1246,21 @@ def executar_calculo(cargas, df_veiculos, selecionados):
                         + ((100 - abs(aproveitamento_vol - aproveitamento_peso)) * 0.15)
                     )
         
-                    fallback.append({
-                        "Veículo": f'{v1["Veículo"]} + {v2["Veículo"]}',
-                        "Status": "Combo",
-                        "Motivo": "Fallback",
-                        "Aproveitamento (%)": round(aproveitamento_vol, 2),
-                        "Aproveitamento Peso (%)": round(aproveitamento_peso, 2),
-                        "Score": round(score, 2)
-                    })
+                    if score > melhor_score:
+                        melhor_score = score
+                        melhor_combo = {
+                            "Veículo": f'{v1["Veículo"]} + {v2["Veículo"]}',
+                            "Status": "Combo",
+                            "Motivo": "Fallback automático",
+                            "Aproveitamento (%)": round(aproveitamento_vol, 2),
+                            "Aproveitamento Peso (%)": round(aproveitamento_peso, 2),
+                            "Score": round(score, 2)
+                        }
         
-            df = pd.DataFrame(fallback)
+            # ✅ cria dataframe com fallback
+            if melhor_combo:
+                df = pd.DataFrame([melhor_combo])
         
-            if not df.empty:
-                df = df.sort_values(by="Score", ascending=False).head(1)
-    
         return df
 
     # ==========================
@@ -1264,7 +1268,7 @@ def executar_calculo(cargas, df_veiculos, selecionados):
     # ==========================
     ranking = []
 
-    for _, veic in df_testar.iterrows():
+    for _, veic in df_viaveis.iterrows():
 
         if empilhavel:
             capacidade_max = veic["largura"] * veic["comprimento"] * veic["altura"]
