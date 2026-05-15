@@ -1356,9 +1356,13 @@ def executar_calculo(cargas, df_veiculos, selecionados):
     # ✅ FILTRAR SOMENTE VEÍCULOS QUE FECHAM 100%
     df_filtrado = df_rank[df_rank["Status"] == "Viável"]
     
-    # ✅ se existir veículo viável → usa só eles
+    # ✅ prioridade: veículos que fecham 100%
     if not df_filtrado.empty:
         df_rank = df_filtrado
+    
+    # ✅ se NÃO tiver veículo viável → usar combo
+    else:
+        df_rank = df_rank[df_rank["Cenário"] == "COMBO"]
     
     # ✅ ordena ranking final
     if not df_rank.empty:
