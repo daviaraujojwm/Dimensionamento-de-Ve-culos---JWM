@@ -17,7 +17,6 @@ MAX_GRID = 10000
 st.markdown("""
 <style>
 /* ============================
-
    FUNDO
 ============================ */
 .stApp {
@@ -1207,9 +1206,56 @@ def executar_calculo(cargas, df_veiculos, selecionados):
     
         df = pd.DataFrame(combos)
     
-        # ✅ só o MELHOR combo
         if not df.empty:
             df = df.sort_values(by="Score", ascending=False).head(1)
+        else:
+            # 🔥 fallback SEM filtro
+        
+            fallback = []
+        
+            for i, v1 in df_testar.iterrows():
+                for j, v2 in df_testar.iterrows():
+        
+                    if j <= i:
+                        continue
+        
+                    if empilhavel:
+                        cap1 = v1["largura"] * v1["comprimento"] * v1["altura"]
+                        cap2 = v2["largura"] * v2["comprimento"] * v2["altura"]
+                    else:
+                        cap1 = v1["largura"] * v1["comprimento"]
+                        cap2 = v2["largura"] * v2["comprimento"]
+        
+                    cap_total = cap1 + cap2
+                    peso_cap = v1["peso_max"] + v2["peso_max"]
+        
+                    if valor_total > cap_total:
+                        continue
+                    if peso_total > peso_cap:
+                        continue
+        
+                    aproveitamento_vol = valor_total / cap_total * 100
+                    aproveitamento_peso = peso_total / peso_cap * 100
+        
+                    score = (
+                        (aproveitamento_vol * 0.55)
+                        + (aproveitamento_peso * 0.30)
+                        + ((100 - abs(aproveitamento_vol - aproveitamento_peso)) * 0.15)
+                    )
+        
+                    fallback.append({
+                        "Veículo": f'{v1["Veículo"]} + {v2["Veículo"]}',
+                        "Status": "Combo",
+                        "Motivo": "Fallback",
+                        "Aproveitamento (%)": round(aproveitamento_vol, 2),
+                        "Aproveitamento Peso (%)": round(aproveitamento_peso, 2),
+                        "Score": round(score, 2)
+                    })
+        
+            df = pd.DataFrame(fallback)
+        
+            if not df.empty:
+                df = df.sort_values(by="Score", ascending=False).head(1)
     
         return df
 
@@ -1251,6 +1297,12 @@ def executar_calculo(cargas, df_veiculos, selecionados):
         })
 
     df_rank = pd.DataFrame(ranking)
+    
+    # 🔥 fallback final se ranking vazio
+    if df_rank.empty:
+        df_rank = df_status.copy()
+        df_rank = df_rank[df_rank["Status"] == "Viável"]
+
 
     # ✅ junta combo
     df_combo = gerar_combinacoes(df_testar, valor_total, peso_total)
