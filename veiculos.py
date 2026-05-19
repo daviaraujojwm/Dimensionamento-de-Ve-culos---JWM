@@ -939,7 +939,22 @@ def escolher_veiculo_unico_completo(cargas_unit, df_veiculos):
                 break
         
 
-        capacidade_real = capacidade_max * 0.85
+        nome = veic["Veículo"]
+        
+        # ✅ regra alinhada com realidade logística
+        if "Fiorino" in nome or "Van" in nome:
+            fator = 0.98   # 🔥 pequena tolerância total
+        
+        elif "HR" in nome or "VUC" in nome:
+            fator = 0.92
+        
+        elif "3/4" in nome or "Toco" in nome:
+            fator = 0.87
+        
+        else:  # Truck, Carreta, etc
+            fator = 0.82
+        
+        capacidade_real = capacidade_max * fator
         
         if (
             valor_total <= capacidade_real
