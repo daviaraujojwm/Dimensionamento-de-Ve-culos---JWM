@@ -955,8 +955,6 @@ def escolher_veiculo_unico_completo(cargas_unit, df_veiculos):
 
 def gerar_cenarios_multi(cargas, df_veiculos, empilhavel=True, max_opcoes=5):
 
-    EFICIENCIA = 0.85
-
     cargas_unit = expand_cargas_unitarias(cargas)
 
     if empilhavel:
@@ -973,7 +971,29 @@ def gerar_cenarios_multi(cargas, df_veiculos, empilhavel=True, max_opcoes=5):
     )
 
     for _, veic in veiculos_ordenados.iterrows():
-
+    
+        nome = veic["Veículo"]
+    
+        # ✅ classificação mais inteligente por tipo
+        if "Carreta" in nome:
+            eficiencia = 0.85
+    
+        elif "Bi-Truck" in nome or "Bitruck" in nome:
+            eficiencia = 0.82
+    
+        elif "Truck" in nome:
+            eficiencia = 0.78
+    
+        elif "3/4" in nome or "Toco" in nome:
+            eficiencia = 0.77
+    
+        elif "HR" in nome or "VUC" in nome:
+            eficiencia = 0.75
+    
+        else:
+            eficiencia = 0.72
+    
+        # capacidade
         if empilhavel:
             cap_vol = (
                 veic["largura"]
@@ -985,49 +1005,47 @@ def gerar_cenarios_multi(cargas, df_veiculos, empilhavel=True, max_opcoes=5):
                 veic["largura"]
                 * veic["comprimento"]
             )
+    
+        # ✅ aplica eficiência nos DOIS
+        cap_vol *= eficiencia
+        cap_peso = veic["peso_max"] * eficiencia
 
-        cap_vol *= EFICIENCIA
-        cap_peso = veic["peso_max"]
 
-        qtd = int(max(
-            volume_total / cap_vol,
-            peso_total / cap_peso
-        ) + 0.999)
+        import math
 
-        if qtd <= 0:
-            continue
+        qtd_por_volume = math.ceil(volume_total / cap_vol)
+        qtd_por_peso = math.ceil(peso_total / cap_peso)
 
-        if qtd > 10:
+        qtd = max(qtd_por_volume, qtd_por_peso)
+
+        if qtd <= 0 or qtd > 10:
             continue
 
         aproveitamento_vol = volume_total / (cap_vol * qtd)
         aproveitamento_peso = peso_total / (cap_peso * qtd)
 
+        aproveitamento_vol = min(1, aproveitamento_vol)
+        aproveitamento_peso = min(1, aproveitamento_peso)
 
         if aproveitamento_vol < 0.05:
             continue
-        
-        # suaviza filtros
-        if cap_vol > volume_total * 2.5:
-            continue
-        
+
         if volume_total < cap_vol * 0.2:
             continue
-        
-        if cap_peso > peso_total * 6:
-            continue
 
+        balanceamento = 1 - abs(aproveitamento_vol - aproveitamento_peso)
 
         score = (
-            (1 / qtd) * 60 +
-            (aproveitamento_vol * 25) +
-            (aproveitamento_peso * 15)
+            (aproveitamento_vol * 50) +
+            (aproveitamento_peso * 30) +
+            (balanceamento * 20) -
+            (qtd * 1.2)
         )
 
         cenarios.append({
             "Veículo": veic["Veículo"],
             "Qtd Veículos": qtd,
-            "Aproveitamento Volume (%)": round(aproveitamento_vol * 100, 1),
+            "Aproveitamento (%)": round(aproveitamento_vol * 100, 1),
             "Aproveitamento Peso (%)": round(aproveitamento_peso * 100, 1),
             "Score": round(score, 2)
         })
@@ -1035,13 +1053,9 @@ def gerar_cenarios_multi(cargas, df_veiculos, empilhavel=True, max_opcoes=5):
     df = pd.DataFrame(cenarios)
 
     if not df.empty:
-        df = df.sort_values(
-            by="Score",
-            ascending=False
-        )
+        df = df.sort_values(by="Score", ascending=False)
 
     return df.head(max_opcoes)
-
 
 # =====================================
 # NOVA FUNÇÃO (ESTAVA FALTANDO)
