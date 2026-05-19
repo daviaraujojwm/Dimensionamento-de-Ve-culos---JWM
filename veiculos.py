@@ -572,10 +572,12 @@ def calcular_score(volume_usado, volume_max, peso_usado, peso_max):
         (balanceamento * 0.15)
     )
 
-    # ✅ NOVA REGRA (sem quebrar)
     if aproveitamento_volume < 30:
         penalidade = (30 - aproveitamento_volume) * 0.8
         score -= penalidade
+    
+    # ✅ GARANTE QUE NUNCA FIQUE NEGATIVO
+    score = max(0, score)
 
     return round(score, 2)
 
@@ -1001,17 +1003,20 @@ def gerar_cenarios_multi(cargas, df_veiculos, empilhavel=True, max_opcoes=5):
         aproveitamento_vol = volume_total / (cap_vol * qtd)
         aproveitamento_peso = peso_total / (cap_peso * qtd)
 
-        if aproveitamento_vol < 0.1: # Reduzido de 0.6 para 0.1 para ser mais flexível
+
+        if aproveitamento_vol < 0.05:
+            continue
+        
+        # suaviza filtros
+        if cap_vol > volume_total * 2.5:
+            continue
+        
+        if volume_total < cap_vol * 0.2:
+            continue
+        
+        if cap_peso > peso_total * 6:
             continue
 
-        if cap_vol > volume_total * 2:
-            continue
-
-        if volume_total < cap_vol * 0.3:
-            continue
-
-        if cap_peso > peso_total * 5:
-            continue
 
         score = (
             (1 / qtd) * 60 +
@@ -1058,6 +1063,61 @@ def dividir_carga_multi(cargas, df_veiculos, empilhavel=True):
 
     return df_multi
 
+def gerar_combinacoes(df_testar, valor_total, peso_total, empilhavel):
+
+    combos = []
+    usados = set()
+
+    for i, v1 in df_testar.iterrows():
+        for j, v2 in df_testar.iterrows():
+
+            if j < i:
+                continue
+
+            chave = tuple(sorted([v1["Veículo"], v2["Veículo"]]))
+            if chave in usados:
+                continue
+            usados.add(chave)
+
+            if empilhavel:
+                cap1 = v1["largura"] * v1["comprimento"] * v1["altura"]
+                cap2 = v2["largura"] * v2["comprimento"] * v2["altura"]
+            else:
+                cap1 = v1["largura"] * v1["comprimento"]
+                cap2 = v2["largura"] * v2["comprimento"]
+
+            cap_total = cap1 + cap2
+            peso_cap = v1["peso_max"] + v2["peso_max"]
+
+            if valor_total > cap_total:
+                continue
+
+            if peso_total > peso_cap * 1.3:
+                continue
+
+            aproveitamento_vol = valor_total / cap_total * 100
+            aproveitamento_peso = peso_total / peso_cap * 100
+
+            if aproveitamento_vol < 30:
+                continue
+
+            score = (
+                (aproveitamento_vol * 0.55)
+                + (aproveitamento_peso * 0.30)
+                + ((100 - abs(aproveitamento_vol - aproveitamento_peso)) * 0.15)
+            )
+
+            combos.append({
+                "Veículo": f'{v1["Veículo"]} + {v2["Veículo"]}',
+                "Status": "Viável",
+                "Motivo": "Combo otimizado",
+                "Cenário": "COMBO",
+                "Aproveitamento (%)": round(aproveitamento_vol, 2),
+                "Aproveitamento Peso (%)": round(aproveitamento_peso, 2),
+                "Score": round(score, 2)
+            })
+
+    return pd.DataFrame(combos)
 
 def executar_calculo(cargas, df_veiculos, selecionados):
     """
@@ -1178,8 +1238,9 @@ def executar_calculo(cargas, df_veiculos, selecionados):
         df_veiculos
     )
     
+
     # ==================================================
-    # PRIORIZA O MENOR VEÍCULO FISICAMENTE COMPATÍVEL
+    # PRIORIZA O MENOR VEÍCULO COMPATÍVEL (COM FILTRO)
     # ==================================================
     if veic_unico is not None:
     
@@ -1195,252 +1256,72 @@ def executar_calculo(cargas, df_veiculos, selecionados):
                 * veic_unico["comprimento"]
             )
     
-        aproveitamento_vol = (
-            valor_total / capacidade
-        ) * 100
+        aproveitamento_vol = (valor_total / capacidade) * 100
+        aproveitamento_peso = (peso_total / veic_unico["peso_max"]) * 100
     
-        aproveitamento_peso = (
-            peso_total / veic_unico["peso_max"]
-        ) * 100
-    
-        score = calcular_score(
-            valor_total,
-            capacidade,
-            peso_total,
-            veic_unico["peso_max"]
-        )
-    
-        return pd.DataFrame([{
-            "Veículo": veic_unico["Veículo"],
-            "Status": "Viável",
-            "Motivo": "Menor veículo compatível",
-            "Cenário": "UNICO",
-            "Aproveitamento (%)": round(
-                aproveitamento_vol,
-                2
-            ),
-            "Aproveitamento Peso (%)": round(
-                aproveitamento_peso,
-                2
-            ),
-            "Score": score
-        }]), {"cenario": "UNICO"}
-    
-    df_multi = gerar_cenarios_multi(
-        cargas,
-        df_testar,
-        empilhavel
-    )
-
-    # ==========================
-    # ✅ FUNÇÃO COMBO
-    # ==========================
-    def gerar_combinacoes(df_testar, valor_total, peso_total):
-        combos = []
-        usados = set()
-    
-        for i, v1 in df_testar.iterrows():
-            for j, v2 in df_testar.iterrows():
-        
-                if j < i:
-                    continue
-    
-                chave = tuple(sorted([v1["Veículo"], v2["Veículo"]]))
-                if chave in usados:
-                    continue
-                usados.add(chave)
-    
-                if empilhavel:
-                    cap1 = v1["largura"] * v1["comprimento"] * v1["altura"]
-                    cap2 = v2["largura"] * v2["comprimento"] * v2["altura"]
-                else:
-                    cap1 = v1["largura"] * v1["comprimento"]
-                    cap2 = v2["largura"] * v2["comprimento"]
-    
-                cap_total = cap1 + cap2
-                peso_cap = v1["peso_max"] + v2["peso_max"]
-    
-                if valor_total > cap_total:
-                    continue
-
-                if peso_total > peso_cap * 1.3:
-                    continue
-
-    
-                aproveitamento_vol = valor_total / cap_total * 100
-                aproveitamento_peso = peso_total / peso_cap * 100
-
-                # 🔥 FILTRO DE QUALIDADE (AQUI)
-                if aproveitamento_vol < 30:
-                    continue
-                
-                score = (
-                    (aproveitamento_vol * 0.55)
-                    + (aproveitamento_peso * 0.30)
-                    + ((100 - abs(aproveitamento_vol - aproveitamento_peso)) * 0.15)
-                )
-                
-                combos.append({
-                    "Veículo": f'{v1["Veículo"]} + {v2["Veículo"]}',
-                    "Status": "Viável",  # ✅ MUDOU AQUI
-                    "Motivo": "Combo otimizado",
-                    "Cenário": "COMBO",
-                    "Aproveitamento (%)": round(aproveitamento_vol, 2),
-                    "Aproveitamento Peso (%)": round(aproveitamento_peso, 2),
-                    "Score": round(score, 2)
-                })
-        df = pd.DataFrame(combos)
-        
-        # ✅ se encontrou combo válido
-        if not df.empty:
-            df = df.sort_values(by="Score", ascending=False).head(1)
-        
-        # 🔥 se NÃO encontrou (fallback automático)
+        # 🔥 NOVO FILTRO IMPORTANTE
+        if aproveitamento_vol < 30:
+            pass  # ignora como UNICO (força ranking ou multi)
         else:
-        
-            melhor_combo = None
-            melhor_score = float("-inf")
-        
-            for i, v1 in df_testar.iterrows():
-                for j, v2 in df_testar.iterrows():
-        
-                    if j <= i:
-                        continue
-        
-                    if empilhavel:
-                        cap1 = v1["largura"] * v1["comprimento"] * v1["altura"]
-                        cap2 = v2["largura"] * v2["comprimento"] * v2["altura"]
-                    else:
-                        cap1 = v1["largura"] * v1["comprimento"]
-                        cap2 = v2["largura"] * v2["comprimento"]
-        
-                    cap_total = cap1 + cap2
-                    peso_cap = v1["peso_max"] + v2["peso_max"]
-        
-                    if valor_total > cap_total:
-                        continue
-                    if peso_total > peso_cap * 1.5:
-                        continue
-        
-                    aproveitamento_vol = valor_total / cap_total * 100
-                    aproveitamento_peso = peso_total / peso_cap * 100
-        
-                    score = (
-                        (aproveitamento_vol * 0.55)
-                        + (aproveitamento_peso * 0.30)
-                        + ((100 - abs(aproveitamento_vol - aproveitamento_peso)) * 0.15)
-                    )
-        
-                    if score > melhor_score:
-                        melhor_score = score
-                        melhor_combo = {
-                            "Veículo": f'{v1["Veículo"]} + {v2["Veículo"]}',  # ✅ vírgula aqui
-                            "Status": "Viável",
-                            "Motivo": "Fallback automático",
-                            "Cenário": "COMBO",
-                            "Aproveitamento (%)": round(aproveitamento_vol, 2),
-                            "Aproveitamento Peso (%)": round(aproveitamento_peso, 2),
-                            "Score": round(score, 2)
-                        }
-
-        
-            # ✅ cria dataframe com fallback
-            if melhor_combo:
-                df = pd.DataFrame([melhor_combo])
-        
-        return df
+            score = calcular_score(
+                valor_total,
+                capacidade,
+                peso_total,
+                veic_unico["peso_max"]
+            )
+    
+            return pd.DataFrame([{
+                "Veículo": veic_unico["Veículo"],
+                "Status": "Viável",
+                "Motivo": "Menor veículo compatível",
+                "Cenário": "UNICO",
+                "Aproveitamento (%)": round(aproveitamento_vol, 2),
+                "Aproveitamento Peso (%)": round(aproveitamento_peso, 2),
+                "Score": score
+            }]), {"cenario": "UNICO"}
+    
 
     # ==========================
     # ✅ RANKING
     # ==========================
     ranking = []
-
+    
     for _, veic in df_testar.iterrows():
-
-
+    
         if empilhavel:
             capacidade_max = veic["largura"] * veic["comprimento"] * veic["altura"]
         else:
             capacidade_max = veic["largura"] * veic["comprimento"]
-
+    
         peso_max = veic["peso_max"]
-
-        excede_peso = peso_total > peso_max
-        excede_volume = valor_total > capacidade_max
-        
-        # ==========================================
-        # ELIMINA VEÍCULO INVIÁVEL
-        # ==========================================
-        if excede_peso or excede_volume:
+    
+        # remove inviáveis
+        if peso_total > peso_max or valor_total > capacidade_max:
             continue
-        
-        aproveitamento_vol = (
-            valor_total / capacidade_max
-        ) * 100
-        
-        aproveitamento_peso = (
-            peso_total / peso_max
-        ) * 100
-        
+    
+        aproveitamento_vol = (valor_total / capacidade_max) * 100
+        aproveitamento_peso = (peso_total / peso_max) * 100
+    
         score = calcular_score(
             valor_total,
             capacidade_max,
             peso_total,
             peso_max
         )
-        
+    
         ranking.append({
             "Veículo": veic["Veículo"],
-            "Status": "Limitado" if (excede_peso or excede_volume) else "Viável",
-            "Motivo": "Excede capacidade" if (excede_peso or excede_volume) else "",
+            "Status": "Viável",
+            "Motivo": "",
             "Cenário": "RANKING",
             "Aproveitamento (%)": round(aproveitamento_vol, 2),
             "Aproveitamento Peso (%)": round(aproveitamento_peso, 2),
             "Score": round(score, 2)
         })
-
+    
     df_rank = pd.DataFrame(ranking)
-
-    # ✅ fallback
-    if df_rank.empty:
-
-        fallback_rank = []
-
-        for _, veic in df_testar.iterrows():
-
-            if empilhavel:
-                capacidade_max = veic["largura"] * veic["comprimento"] * veic["altura"]
-            else:
-                capacidade_max = veic["largura"] * veic["comprimento"]
-
-            peso_max = veic["peso_max"]
-
-            aproveitamento_vol = valor_total / capacidade_max * 100
-            aproveitamento_peso = peso_total / peso_max * 100
-
-            score = (
-                (aproveitamento_vol * 0.55)
-                + (aproveitamento_peso * 0.30)
-                + ((100 - abs(aproveitamento_vol - aproveitamento_peso)) * 0.15)
-            )
-
-            fallback_rank.append({
-                "Veículo": veic["Veículo"],
-                "Status": "Fallback",
-                "Motivo": "Sem veículo ideal",
-                "Aproveitamento (%)": round(aproveitamento_vol, 2),
-                "Aproveitamento Peso (%)": round(aproveitamento_peso, 2),
-                "Score": round(score, 2)
-            })
-
-        df_rank = pd.DataFrame(fallback_rank)
-
-    # ✅ 1 — VEÍCULOS ÚNICOS (RANKING)
-    df_filtrado = df_rank[df_rank["Status"] == "Viável"]
     
-    if not df_filtrado.empty:
-    
-        df_rank = df_filtrado.copy()
+    if not df_rank.empty:
     
         df_rank = df_rank.sort_values(
             by="Score",
@@ -1450,18 +1331,36 @@ def executar_calculo(cargas, df_veiculos, selecionados):
         return df_rank, {"cenario": "RANKING"}
     
     
-    # ✅ 2 — MULTI VEÍCULO COM DIVISÃO REAL
+    # ==========================
+    # ✅ MULTI + COMBO UNIFICADO
+    # ==========================
     df_multi_real = dividir_carga_multi(
         cargas,
         df_testar,
         empilhavel
     )
+
+    df_combo = gerar_combinacoes(
+        df_testar,
+        valor_total,
+        peso_total,
+        empilhavel
+    )
     
-    if not df_multi_real.empty:
+    df_multi_unificado = pd.concat(
+        [df_multi_real, df_combo],
+        ignore_index=True
+    )
     
-        return df_multi_real, {"cenario": "MULTI"}
+    if not df_multi_unificado.empty:
     
+        df_multi_unificado = df_multi_unificado.sort_values(
+            by="Score",
+            ascending=False
+        ).reset_index(drop=True)
     
+        return df_multi_unificado, {"cenario": "MULTI"}
+
     # ✅ 3 — FALLBACK (nunca ficar vazio)
     # Se chegamos aqui, significa que não houve veículo "Viável" 100%
     # Vamos retornar todos os veículos testados para que o usuário veja o motivo da inviabilidade
