@@ -1256,6 +1256,7 @@ def executar_calculo(cargas, df_veiculos, selecionados):
     # ==================================================
     # PRIORIZA O MENOR VEÍCULO COMPATÍVEL (COM FILTRO)
     # ==================================================
+
     if veic_unico is not None:
     
         if empilhavel:
@@ -1273,17 +1274,21 @@ def executar_calculo(cargas, df_veiculos, selecionados):
         aproveitamento_vol = (valor_total / capacidade) * 100
         aproveitamento_peso = (peso_total / veic_unico["peso_max"]) * 100
     
-        # 🔥 NOVO FILTRO IMPORTANTE
-        if aproveitamento_vol < 30:
-            pass  # ignora como UNICO (força ranking ou multi)
-        else:
+        # ✅ NOVO CRITÉRIO MAIS INTELIGENTE
+
+        usar_unico = (
+            aproveitamento_vol >= 35
+            and aproveitamento_peso >= 25
+        )
+        
+        if usar_unico:
             score = calcular_score(
                 valor_total,
                 capacidade,
                 peso_total,
                 veic_unico["peso_max"]
             )
-    
+        
             return pd.DataFrame([{
                 "Veículo": veic_unico["Veículo"],
                 "Status": "Viável",
@@ -1293,7 +1298,7 @@ def executar_calculo(cargas, df_veiculos, selecionados):
                 "Aproveitamento Peso (%)": round(aproveitamento_peso, 2),
                 "Score": score
             }]), {"cenario": "UNICO"}
-    
+
 
     # ==========================
     # ✅ RANKING
