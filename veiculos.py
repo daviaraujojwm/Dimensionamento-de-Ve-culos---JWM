@@ -938,11 +938,15 @@ def escolher_veiculo_unico_completo(cargas_unit, df_veiculos):
                 dimensoes_ok = False
                 break
         
+
+        capacidade_real = capacidade_max * 0.85
+        
         if (
-            valor_total <= capacidade_max
+            valor_total <= capacidade_real
             and peso_total <= peso_max
             and dimensoes_ok
         ):
+
             return veic
 
     
@@ -988,7 +992,7 @@ def gerar_cenarios_multi(cargas, df_veiculos, empilhavel=True, max_opcoes=5):
     
         else:
             eficiencia = 0.72
-    
+
         # capacidade
         if empilhavel:
             cap_vol = (
@@ -1270,12 +1274,12 @@ def executar_calculo(cargas, df_veiculos, selecionados):
         aproveitamento_vol = (valor_total / capacidade) * 100
         aproveitamento_peso = (peso_total / veic_unico["peso_max"]) * 100
     
-        # ✅ NOVO CRITÉRIO MAIS INTELIGENTE
-
-        usar_unico = (
-            aproveitamento_vol >= 35
-        )
-        
+        # ✅ AJUSTE INTELIGENTE FINAL
+        if valor_total < 10:  # carga pequena
+            usar_unico = True
+        else:
+            usar_unico = (aproveitamento_vol >= 35)
+    
         if usar_unico:
             score = calcular_score(
                 valor_total,
@@ -1283,7 +1287,7 @@ def executar_calculo(cargas, df_veiculos, selecionados):
                 peso_total,
                 veic_unico["peso_max"]
             )
-        
+    
             return pd.DataFrame([{
                 "Veículo": veic_unico["Veículo"],
                 "Status": "Viável",
@@ -1293,7 +1297,6 @@ def executar_calculo(cargas, df_veiculos, selecionados):
                 "Aproveitamento Peso (%)": round(aproveitamento_peso, 2),
                 "Score": score
             }]), {"cenario": "UNICO"}
-
 
     # ==========================
     # ✅ RANKING
