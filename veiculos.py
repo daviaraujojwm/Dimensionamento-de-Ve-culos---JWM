@@ -2,6 +2,8 @@ import streamlit as st
 import pandas as pd
 from io import BytesIO
 import plotly.graph_objects as go
+import itertools
+
 
 # 🔥 PRIMEIRA COISA
 st.set_page_config(
@@ -803,10 +805,11 @@ def simular_empilhamento_3d(
         if item["peso"] <= 0:
             continue
 
-        orientacoes = [
-            (item["comp"], item["larg"], item["alt"]),
-            (item["larg"], item["comp"], item["alt"])
-        ]
+        
+        orientacoes = list(itertools.permutations(
+            (item["comp"], item["larg"], item["alt"])
+        ))
+
 
         for comp_o, larg_o, alt_o in orientacoes:
 
@@ -915,18 +918,11 @@ def escolher_veiculo_unico_completo(cargas_unit, df_veiculos):
         
             cabe = False
         
-            orientacoes = [
-                (
-                    item["comp"],
-                    item["larg"],
-                    item["alt"]
-                ),
-                (
-                    item["larg"],
-                    item["comp"],
-                    item["alt"]
-                )
-            ]
+            import itertools
+            
+            orientacoes = list(itertools.permutations(
+                (item["comp"], item["larg"], item["alt"])
+            ))
         
             for comp_i, larg_i, alt_i in orientacoes:
         
@@ -1278,7 +1274,6 @@ def executar_calculo(cargas, df_veiculos, selecionados):
 
         usar_unico = (
             aproveitamento_vol >= 35
-            and aproveitamento_peso >= 25
         )
         
         if usar_unico:
