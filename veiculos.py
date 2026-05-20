@@ -962,9 +962,14 @@ def escolher_veiculo_unico_completo(cargas_unit, df_veiculos):
             and dimensoes_ok
         ):
         
-            # 🔥 impede escolher veículo grande demais sem necessidade
-            if valor_total < capacidade_real * 0.4:
-                continue
+            # 🔥 filtro mais rígido para veículos grandes
+            if "Truck" in nome or "Carreta" in nome:
+                if valor_total < capacidade_real * 0.6:
+                    continue
+            else:
+                if valor_total < capacidade_real * 0.4:
+                    continue
+
         
             return veic
 
@@ -1249,8 +1254,14 @@ def executar_calculo(cargas, df_veiculos, selecionados):
         df_multi = gerar_cenarios_multi(cargas, df_veiculos, empilhavel)
     
         if not df_multi.empty:
-            return df_multi, {"cenario": "MULTI"}
-    
+        
+            df_multi = df_multi.sort_values(by="Score", ascending=False).reset_index(drop=True)
+        
+            # 🔥 seleciona apenas a melhor opção
+            melhor = df_multi.iloc[[0]]
+        
+            return melhor, {"cenario": "MULTI"}
+            
         return pd.DataFrame([{
             "Veículo": "Nenhum",
             "Status": "Inviável",
