@@ -962,8 +962,13 @@ def escolher_veiculo_unico_completo(cargas_unit, df_veiculos):
             and dimensoes_ok
         ):
         
-            # 🔥 filtro por tipo (controle fino)
+            # 🔥 bloqueio adicional de hierarquia
             if "Carreta" in nome:
+            
+                # 👇 só permite carreta quando carga realmente grande
+                if valor_total < 60:
+                    continue
+            
                 if valor_total < capacidade_real * 0.8:
                     continue
             
@@ -1291,10 +1296,9 @@ def executar_calculo(cargas, df_veiculos, selecionados):
     
     veic_unico = escolher_veiculo_unico_completo(
         cargas_unit,
-        df_veiculos
+        df_testar
     )
-    
-
+        
     # ==================================================
     # PRIORIZA O MENOR VEÍCULO COMPATÍVEL (COM FILTRO)
     # ==================================================
