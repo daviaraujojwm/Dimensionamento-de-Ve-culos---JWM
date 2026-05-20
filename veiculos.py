@@ -964,7 +964,7 @@ def escolher_veiculo_unico_completo(cargas_unit, df_veiculos):
         
             # 🔥 filtro por tipo (controle fino)
             if "Carreta" in nome:
-                if valor_total < capacidade_real * 0.75:
+                if valor_total < capacidade_real * 0.8:
                     continue
             
             elif "Truck" in nome or "Bi-Truck" in nome or "Bitruck" in nome:
