@@ -961,7 +961,11 @@ def escolher_veiculo_unico_completo(cargas_unit, df_veiculos):
             and peso_total <= peso_max
             and dimensoes_ok
         ):
-
+        
+            # 🔥 impede escolher veículo grande demais sem necessidade
+            if valor_total < capacidade_real * 0.4:
+                continue
+        
             return veic
 
     
@@ -1059,7 +1063,7 @@ def gerar_cenarios_multi(cargas, df_veiculos, empilhavel=True, max_opcoes=5):
 
         cenarios.append({
             "Veículo": veic["Veículo"],
-            "Qtd Veículos": qtd,
+            "Configuração": f"{qtd}x {veic['Veículo']}",
             "Aproveitamento (%)": round(aproveitamento_vol * 100, 1),
             "Aproveitamento Peso (%)": round(aproveitamento_peso * 100, 1),
             "Score": round(score, 2)
@@ -1240,7 +1244,8 @@ def executar_calculo(cargas, df_veiculos, selecionados):
     df_status = pd.DataFrame(registros)
     
     # ✅ proteção total
-    if df_status.empty:
+    if df_status.empty or not any(df_status["Status"] == "Viável"):
+    
         df_multi = gerar_cenarios_multi(cargas, df_veiculos, empilhavel)
     
         if not df_multi.empty:
@@ -1331,6 +1336,10 @@ def executar_calculo(cargas, df_veiculos, selecionados):
         if peso_total > peso_max or valor_total > capacidade_max:
             continue
     
+        # 🔥 trava ranking (evita veículos grandes desnecessários)
+        if valor_total < (capacidade_max * 0.8) * 0.25:
+            continue
+    
         aproveitamento_vol = (valor_total / capacidade_max) * 100
         aproveitamento_peso = (peso_total / peso_max) * 100
     
@@ -1391,7 +1400,11 @@ def executar_calculo(cargas, df_veiculos, selecionados):
             ascending=False
         ).reset_index(drop=True)
     
-        return df_multi_unificado, {"cenario": "MULTI"}
+        # 🔥 pega automaticamente o melhor cenário
+        melhor = df_multi_unificado.iloc[[0]]
+    
+        return melhor, {"cenario": "MULTI"}
+    
 
     # ✅ 3 — FALLBACK (nunca ficar vazio)
     # Se chegamos aqui, significa que não houve veículo "Viável" 100%
