@@ -1312,46 +1312,51 @@ def executar_calculo(cargas, df_veiculos, selecionados):
             if valor_total < 60:
                 veic_unico = None
     
-        if veic_unico is not None:
+    if veic_unico is not None:
     
-            if empilhavel:
-                capacidade = (
-                    veic_unico["largura"]
-                    * veic_unico["comprimento"]
-                    * veic_unico["altura"]
-                )
-            else:
-                capacidade = (
-                    veic_unico["largura"]
-                    * veic_unico["comprimento"]
-                )
+        if empilhavel:
+            capacidade = (
+                veic_unico["largura"]
+                * veic_unico["comprimento"]
+                * veic_unico["altura"]
+            )
+        else:
+            capacidade = (
+                veic_unico["largura"]
+                * veic_unico["comprimento"]
+            )
     
-            aproveitamento_vol = (valor_total / capacidade) * 100
-            aproveitamento_peso = (peso_total / veic_unico["peso_max"]) * 100
+        aproveitamento_vol = (valor_total / capacidade) * 100
+        aproveitamento_peso = (peso_total / veic_unico["peso_max"]) * 100
     
-            # ✅ AJUSTE INTELIGENTE FINAL
-            if valor_total < 10:
-                usar_unico = True
+        # 🔥 AJUSTE INTELIGENTE FINAL + BLOQUEIO DE CARRETA
+        if valor_total < 10:
+            usar_unico = True
+        else:
+    
+            # 🚫 bloqueia carreta desnecessária
+            if "Carreta" in veic_unico["Veículo"] and valor_total < 60:
+                usar_unico = False
             else:
                 usar_unico = (aproveitamento_vol >= 35)
     
-            if usar_unico:
-                score = calcular_score(
-                    valor_total,
-                    capacidade,
-                    peso_total,
-                    veic_unico["peso_max"]
-                )
+        if usar_unico:
+            score = calcular_score(
+                valor_total,
+                capacidade,
+                peso_total,
+                veic_unico["peso_max"]
+            )
     
-                return pd.DataFrame([{
-                    "Veículo": veic_unico["Veículo"],
-                    "Status": "Viável",
-                    "Motivo": "Menor veículo compatível",
-                    "Cenário": "UNICO",
-                    "Aproveitamento (%)": round(aproveitamento_vol, 2),
-                    "Aproveitamento Peso (%)": round(aproveitamento_peso, 2),
-                    "Score": score
-                }]), {"cenario": "UNICO"}
+            return pd.DataFrame([{
+                "Veículo": veic_unico["Veículo"],
+                "Status": "Viável",
+                "Motivo": "Menor veículo compatível",
+                "Cenário": "UNICO",
+                "Aproveitamento (%)": round(aproveitamento_vol, 2),
+                "Aproveitamento Peso (%)": round(aproveitamento_peso, 2),
+                "Score": score
+            }]), {"cenario": "UNICO"}
 
     # ==========================
     # ✅ RANKING
