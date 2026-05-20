@@ -962,10 +962,15 @@ def escolher_veiculo_unico_completo(cargas_unit, df_veiculos):
             and dimensoes_ok
         ):
         
-            # 🔥 filtro mais rígido para veículos grandes
-            if "Truck" in nome or "Carreta" in nome:
-                if valor_total < capacidade_real * 0.6:
+            # 🔥 filtro por tipo (controle fino)
+            if "Carreta" in nome:
+                if valor_total < capacidade_real * 0.7:
                     continue
+            
+            elif "Truck" in nome or "Bi-Truck" in nome or "Bitruck" in nome:
+                if valor_total < capacidade_real * 0.5:
+                    continue
+            
             else:
                 if valor_total < capacidade_real * 0.4:
                     continue
@@ -1096,7 +1101,13 @@ def dividir_carga_multi(cargas, df_veiculos, empilhavel=True):
         return pd.DataFrame()
 
     df_multi["Status"] = "Viável"
-    df_multi["Motivo"] = "Distribuição multi-veículo"
+    df_multi["Motivo"] = df_multi.apply(
+        lambda row: (
+            f"A carga exige múltiplos veículos.\n"
+            f"Solução ideal: {row['Configuração']} para atender 100% do volume e peso."
+        ),
+        axis=1
+    )
     df_multi["Cenário"] = "MULTI"
 
     return df_multi
@@ -1251,7 +1262,7 @@ def executar_calculo(cargas, df_veiculos, selecionados):
     # ✅ proteção total
     if df_status.empty or not any(df_status["Status"] == "Viável"):
     
-        df_multi = gerar_cenarios_multi(cargas, df_veiculos, empilhavel)
+        df_multi = dividir_carga_multi(cargas, df_testar, empilhavel)
     
         if not df_multi.empty:
         
