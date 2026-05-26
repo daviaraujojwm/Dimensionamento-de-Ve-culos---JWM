@@ -584,10 +584,9 @@ def calcular_score(volume_usado, volume_max, peso_usado, peso_max):
     balanceamento = 100 - abs(aproveitamento_volume - aproveitamento_peso)
 
     score = (
-        (aproveitamento_volume * 0.45) +
-        (aproveitamento_peso * 0.40) +
-        (balanceamento * 0.15)
-    )
+        (aproveitamento_volume * 0.5) +
+        (aproveitamento_peso * 0.5)
+    ) * (balanceamento / 100)
 
     # penaliza volume baixo
     if aproveitamento_volume < 30:
@@ -600,6 +599,9 @@ def calcular_score(volume_usado, volume_max, peso_usado, peso_max):
     return max(0, round(score, 2))
 
 def escolher_veiculo_unico_completo(cargas_unit, df_veiculos):
+
+    if not cargas_unit:
+        return None
 
     if empilhavel:
         valor_total = sum(c["volume"] for c in cargas_unit)
@@ -652,7 +654,6 @@ def escolher_veiculo_unico_completo(cargas_unit, df_veiculos):
             melhor_veiculo = veic
 
     return melhor_veiculo
-
 
 def identificar_fator_limitante(
     volume_usado, volume_max,
@@ -1004,8 +1005,10 @@ def gerar_cenarios_multi(cargas, df_veiculos, empilhavel=True, max_opcoes=5):
             )
     
         # ✅ aplica eficiência nos DOIS
-        cap_vol *= eficiencia
-        cap_peso = veic["peso_max"] * eficiencia
+        fator = get_fator(nome)
+        
+        cap_vol *= eficiencia * fator
+        cap_peso = veic["peso_max"] * eficiencia * fator
 
         qtd_por_volume = math.ceil(volume_total / cap_vol)
         qtd_por_peso = math.ceil(peso_total / cap_peso)
@@ -1284,17 +1287,19 @@ def executar_calculo(cargas, df_veiculos, selecionados):
         # =========================
         # CAPACIDADE DO VEÍCULO
         # =========================
+        fator = get_fator(veic_unico["Veículo"])
+        
         if empilhavel:
             capacidade = (
                 veic_unico["largura"]
                 * veic_unico["comprimento"]
                 * veic_unico["altura"]
-            )
+            ) * fator
         else:
             capacidade = (
                 veic_unico["largura"]
                 * veic_unico["comprimento"]
-            )
+            ) * fator
     
         # =========================
         # APROVEITAMENTO
@@ -1430,9 +1435,14 @@ def executar_calculo(cargas, df_veiculos, selecionados):
     df_rank = pd.DataFrame(registros)
     
     # Adicionamos colunas de aproveitamento para o usuário ver o quão longe está
-    df_rank["Aproveitamento (%)"] = (valor_total / (df_rank["Volume Máx"])) * 100
-    df_rank["Aproveitamento Peso (%)"] = (peso_total / df_rank["Peso Máx"]) * 100
+    df_rank["Aproveitamento (%)"] = df_rank["Volume Máx"].apply(
+        lambda v: (valor_total / v * 100) if v > 0 else 0
+    )
     
+    df_rank["Aproveitamento Peso (%)"] = df_rank["Peso Máx"].apply(
+        lambda v: (peso_total / v * 100) if v > 0 else 0
+    )
+        
     # Calcula um score simplificado para ordenar os "menos piores" primeiro
     df_rank["Score"] = (df_rank["Aproveitamento (%)"] * 0.5) + (df_rank["Aproveitamento Peso (%)"] * 0.5)
     
@@ -1576,14 +1586,16 @@ if st.button("🔍 Simular Empilhamento 3D"):
     
     volume_veiculo = (
         veic["largura"] * veic["comprimento"] * veic["altura"]
-    ) * fator
+    )
     
-    valor_total_caixas = sum(c["volume"] for c in cargas_unitarias)
+    valor_total_real = sum(
+        c["Volume total (m³)"] for c in st.session_state.cargas
+    )
     
-    if valor_total_caixas > volume_veiculo * 1.05:
+    if valor_total_real > volume_veiculo * 1.05:
         st.error("❌ O volume das caixas excede a capacidade física do veículo.")
         st.stop()
-    
+
     # Simulação 3D
     posicoes, caixas, volume_usado, peso_usado = simular_empilhamento_3d(
         cargas_unitarias,
