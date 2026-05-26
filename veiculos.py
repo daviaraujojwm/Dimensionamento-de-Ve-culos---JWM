@@ -590,14 +590,19 @@ def calcular_score(volume_usado, volume_max, peso_usado, peso_max):
         (aproveitamento_peso * 0.40) +
         (balanceamento * 0.15)
     )
-
+    
+    # ✅ penaliza volume baixo
     if aproveitamento_volume < 30:
         penalidade = (30 - aproveitamento_volume) * 0.8
         score -= penalidade
     
-    # ✅ GARANTE QUE NUNCA FIQUE NEGATIVO
+    # ✅ 🔥 penaliza peso no limite (ESSENCIAL)
+    if aproveitamento_peso > 95:
+        score -= 15
+    
+    # ✅ segurança
     score = max(0, score)
-
+    
     return round(score, 2)
 
 def identificar_fator_limitante(
@@ -1285,8 +1290,8 @@ def executar_calculo(cargas, df_veiculos, selecionados):
         # =========================
         # APROVEITAMENTO
         # =========================
-        aproveitamento_vol = (valor_total / capacidade) * 100
-        aproveitamento_peso = (peso_total / veic_unico["peso_max"]) * 100
+        aproveitamento_vol = min(100, (valor_total / capacidade) * 100)
+        aproveitamento_peso = min(100, (peso_total / veic_unico["peso_max"]) * 100)
     
         # =========================
         # SCORE
@@ -1337,9 +1342,9 @@ def executar_calculo(cargas, df_veiculos, selecionados):
         if peso_total > peso_max or valor_total > capacidade_max:
             continue
     
-        aproveitamento_vol = (valor_total / capacidade_max) * 100
-        aproveitamento_peso = (peso_total / peso_max) * 100
-    
+        aproveitamento_vol = min(100, (valor_total / capacidade_max) * 100)
+        aproveitamento_peso = min(100, (peso_total / peso_max) * 100)
+
         score = calcular_score(
             valor_total,
             capacidade_max,
