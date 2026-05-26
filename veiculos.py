@@ -581,29 +581,78 @@ def calcular_score(volume_usado, volume_max, peso_usado, peso_max):
     aproveitamento_volume = min(100, aproveitamento_volume)
     aproveitamento_peso = min(100, aproveitamento_peso)
 
-    # ✅ CALCULA ANTES
     balanceamento = 100 - abs(aproveitamento_volume - aproveitamento_peso)
 
-    # ✅ score base
     score = (
         (aproveitamento_volume * 0.45) +
         (aproveitamento_peso * 0.40) +
         (balanceamento * 0.15)
     )
-    
-    # ✅ penaliza volume baixo
+
+    # penaliza volume baixo
     if aproveitamento_volume < 30:
-        penalidade = (30 - aproveitamento_volume) * 0.8
-        score -= penalidade
-    
-    # ✅ 🔥 penaliza peso no limite (ESSENCIAL)
-    if aproveitamento_peso > 95:
-        score -= 15
-    
-    # ✅ segurança
-    score = max(0, score)
-    
-    return round(score, 2)
+        score -= (30 - aproveitamento_volume) * 0.8
+
+    # 🔥 penaliza peso alto
+    if aproveitamento_peso > 80:
+        score -= 20
+
+    return max(0, round(score, 2))
+
+def escolher_veiculo_unico_completo(cargas_unit, df_veiculos):
+
+    if empilhavel:
+        valor_total = sum(c["volume"] for c in cargas_unit)
+    else:
+        valor_total = sum(c["comp"] * c["larg"] for c in cargas_unit)
+
+    peso_total = sum(c["peso"] for c in cargas_unit)
+
+    melhor_score = -1
+    melhor_veiculo = None
+
+    df_ordenado = df_veiculos.sort_values(
+        by="Capacidade Volume (m³)"
+    )
+
+    max_comp = max(c["comp"] for c in cargas_unit)
+    max_larg = max(c["larg"] for c in cargas_unit)
+    max_alt  = max(c["alt"] for c in cargas_unit)
+
+    for _, veic in df_ordenado.iterrows():
+
+        # ✅ BLOQUEIO FÍSICO
+        if (
+            max_comp > veic["comprimento"]
+            or max_larg > veic["largura"]
+            or max_alt > veic["altura"]
+        ):
+            continue
+
+        capacidade = (
+            veic["largura"]
+            * veic["comprimento"]
+            * veic["altura"]
+        ) * get_fator(veic["Veículo"])
+
+        peso_max = veic["peso_max"]
+
+        if valor_total > capacidade or peso_total > peso_max:
+            continue
+
+        score = calcular_score(
+            valor_total,
+            capacidade,
+            peso_total,
+            peso_max
+        )
+
+        if score > melhor_score:
+            melhor_score = score
+            melhor_veiculo = veic
+
+    return melhor_veiculo
+
 
 def identificar_fator_limitante(
     volume_usado, volume_max,
@@ -900,50 +949,6 @@ def simular_empilhamento_3d(
     volume_usado = sum(c * l * a for (_, _, _, c, l, a) in posicoes_ocupadas)
 
     return posicoes_ocupadas, caixas_alocadas, volume_usado, peso_acumulado
-    
-def escolher_veiculo_unico_completo(cargas_unit, df_veiculos):
-
-    if empilhavel:
-        valor_total = sum(c["volume"] for c in cargas_unit)
-    else:
-        valor_total = sum(c["comp"] * c["larg"] for c in cargas_unit)
-
-    peso_total = sum(c["peso"] for c in cargas_unit)
-
-    melhor_score = -1
-    melhor_veiculo = None
-    
-    df_ordenado = df_veiculos.sort_values(
-        by="Capacidade Volume (m³)"
-    )
-    for _, veic in df_veiculos.iterrows():
-
-        capacidade = (
-            veic["largura"]
-            * veic["comprimento"]
-            * veic["altura"]
-        ) * get_fator(veic["Veículo"])
-
-        peso_max = veic["peso_max"]
-
-        # ✅ valida se cabe
-        if valor_total > capacidade or peso_total > peso_max:
-            continue
-
-        # ✅ calcula score
-        score = calcular_score(
-            valor_total,
-            capacidade,
-            peso_total,
-            peso_max
-        )
-
-        # ✅ escolhe o melhor
-        if score > melhor_score:
-            melhor_score = score
-            melhor_veiculo = veic
-
-    return melhor_veiculo
 
 def gerar_cenarios_multi(cargas, df_veiculos, empilhavel=True, max_opcoes=5):
 
@@ -1006,8 +1011,12 @@ def gerar_cenarios_multi(cargas, df_veiculos, empilhavel=True, max_opcoes=5):
         qtd_por_peso = math.ceil(peso_total / cap_peso)
 
         qtd = max(qtd_por_volume, qtd_por_peso)
-
+        
         if qtd <= 0 or qtd > 10:
+        
+            continue
+        # ✅ 🔥 impede MULTI com 1 veículo
+        if qtd == 1:
             continue
 
         aproveitamento_vol = volume_total / (cap_vol * qtd)
@@ -1322,7 +1331,14 @@ def executar_calculo(cargas, df_veiculos, selecionados):
     ranking = []
     
     for _, veic in df_testar.iterrows():
-    
+        # ✅ 🔥 BLOQUEIO FÍSICO REAL
+        if (
+            max_comp > veic["comprimento"]
+            or max_larg > veic["largura"]
+            or max_alt > veic["altura"]
+        ):
+            continue
+
         nome = veic["Veículo"]
         
         # capacidade base
