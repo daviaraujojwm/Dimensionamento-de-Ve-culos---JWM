@@ -3,6 +3,7 @@ import pandas as pd
 from io import BytesIO
 import plotly.graph_objects as go
 import itertools
+import math
 
 
 # 🔥 PRIMEIRA COISA
@@ -213,6 +214,22 @@ def get_veiculos():
     return df
 
 df_veiculos = get_veiculos()
+
+# ============================
+# FUNÇÃO GLOBAL DE FATOR
+# ============================
+def get_fator(nome):
+    if " + " in nome:
+        return 0.82
+
+    if "Fiorino" in nome or "Van" in nome:
+        return 0.98
+    elif "HR" in nome or "VUC" in nome:
+        return 0.92
+    elif "3/4" in nome or "Toco" in nome:
+        return 0.87
+    else:
+        return 0.82
 
 # ============================
 # SESSION STATE
@@ -732,7 +749,7 @@ def cabe_no_piso_heuristica(items, comp_v, larg_v, alt_v):
                 break
 
             # Cria nova camada (empilhamento)
-            if altura_usada + it["alt"] <= alt_v:
+            if altura_usada + it["alt"] <= alt_v * 0.98:
                 camadas.append({"len": comp_i})
                 altura_usada += it["alt"]
                 colocado = True
@@ -830,7 +847,7 @@ def simular_empilhamento_3d(
                 y_max = max(1, int(y_max / fator))
                 z_max = max(1, int(z_max / fator))
 
-            step = max(1, min(x_max, y_max, z_max) // 10)
+            step = 1
 
             # ================================
             # ✅ LOOP EM CAMADAS (Z FORÇADO)
@@ -878,54 +895,44 @@ def simular_empilhamento_3d(
     volume_usado = sum(c * l * a for (_, _, _, c, l, a) in posicoes_ocupadas)
 
     return posicoes_ocupadas, caixas_alocadas, volume_usado, peso_acumulado
-
+    
 def escolher_veiculo_unico_completo(cargas_unit, df_veiculos):
-    """
-    Retorna o MENOR veículo que comporta TODA a carga
-    respeitando peso, volume E dimensões físicas unitárias.
-    """
 
-    # Totais
     if empilhavel:
         valor_total = sum(c["volume"] for c in cargas_unit)
     else:
         valor_total = sum(c["comp"] * c["larg"] for c in cargas_unit)
+
     peso_total = sum(c["peso"] for c in cargas_unit)
 
-    # 🔒 Dimensões máximas unitárias da carga
-    max_comp = max(c["comp"] for c in cargas_unit)
-    max_larg = max(c["larg"] for c in cargas_unit)
-    max_alt  = max(c["alt"] for c in cargas_unit)
-
-    # Menor veículo primeiro
     veiculos_ordenados = df_veiculos.sort_values(
         by="Capacidade Volume (m³)",
         ascending=True
     )
 
     for _, veic in veiculos_ordenados.iterrows():
-    
+
+        nome = veic["Veículo"]
+        fator = get_fator(nome)
+
         if empilhavel:
-            capacidade_max = veic["largura"] * veic["comprimento"] * veic["altura"]
+            capacidade_base = veic["largura"] * veic["comprimento"] * veic["altura"]
         else:
-            capacidade_max = veic["largura"] * veic["comprimento"]
-    
+            capacidade_base = veic["largura"] * veic["comprimento"]
+
+        capacidade_max = capacidade_base * fator
         peso_max = veic["peso_max"]
-    
+
         dimensoes_ok = True
-        
+
+        # ✅ valida TODAS as caixas
         for item in cargas_unit:
-        
+
             cabe = False
-        
-            import itertools
-            
-            orientacoes = list(itertools.permutations(
+
+            for comp_i, larg_i, alt_i in itertools.permutations(
                 (item["comp"], item["larg"], item["alt"])
-            ))
-        
-            for comp_i, larg_i, alt_i in orientacoes:
-        
+            ):
                 if (
                     comp_i <= veic["comprimento"]
                     and larg_i <= veic["largura"]
@@ -933,59 +940,36 @@ def escolher_veiculo_unico_completo(cargas_unit, df_veiculos):
                 ):
                     cabe = True
                     break
-        
+
             if not cabe:
                 dimensoes_ok = False
                 break
-        
 
-        nome = veic["Veículo"]
-        
-        # ✅ regra alinhada com realidade logística
-        if "Fiorino" in nome or "Van" in nome:
-            fator = 0.98   # 🔥 pequena tolerância total
-        
-        elif "HR" in nome or "VUC" in nome:
-            fator = 0.92
-        
-        elif "3/4" in nome or "Toco" in nome:
-            fator = 0.87
-        
-        else:  # Truck, Carreta, etc
-            fator = 0.82
-        
-        capacidade_real = capacidade_max * fator
-        
+        # ✅ valida capacidade total
         if (
-            valor_total <= capacidade_real
+            valor_total <= capacidade_max
             and peso_total <= peso_max
             and dimensoes_ok
         ):
-        
-            # 🔥 bloqueio adicional de hierarquia
+
+            # ✅ regras logísticas
             if "Carreta" in nome:
-            
-                # 👇 só permite carreta quando carga realmente grande
                 if valor_total < 60:
                     continue
-            
-                if valor_total < capacidade_real * 0.8:
-                    continue
-            
-            elif "Truck" in nome or "Bi-Truck" in nome or "Bitruck" in nome:
-                if valor_total < capacidade_real * 0.5:
-                    continue
-            
-            else:
-                if valor_total < capacidade_real * 0.3:
+                if valor_total < capacidade_max * 0.8:
                     continue
 
-        
+            elif "Truck" in nome or "Bi-Truck" in nome or "Bitruck" in nome:
+                if valor_total < capacidade_max * 0.5:
+                    continue
+
+            else:
+                if valor_total < capacidade_max * 0.3:
+                    continue
+
             return veic
 
-    
     return None
-
 
 def gerar_cenarios_multi(cargas, df_veiculos, empilhavel=True, max_opcoes=5):
 
@@ -1043,9 +1027,6 @@ def gerar_cenarios_multi(cargas, df_veiculos, empilhavel=True, max_opcoes=5):
         # ✅ aplica eficiência nos DOIS
         cap_vol *= eficiencia
         cap_peso = veic["peso_max"] * eficiencia
-
-
-        import math
 
         qtd_por_volume = math.ceil(volume_total / cap_vol)
         qtd_por_peso = math.ceil(peso_total / cap_peso)
@@ -1133,15 +1114,25 @@ def gerar_combinacoes(df_testar, valor_total, peso_total, empilhavel):
                 continue
             usados.add(chave)
 
+            f1 = get_fator(v1["Veículo"])
+            f2 = get_fator(v2["Veículo"])
+            
             if empilhavel:
-                cap1 = v1["largura"] * v1["comprimento"] * v1["altura"]
-                cap2 = v2["largura"] * v2["comprimento"] * v2["altura"]
+                cap1 = (
+                    v1["largura"] * v1["comprimento"] * v1["altura"]
+                ) * f1
+            
+                cap2 = (
+                    v2["largura"] * v2["comprimento"] * v2["altura"]
+                ) * f2
             else:
-                cap1 = v1["largura"] * v1["comprimento"]
-                cap2 = v2["largura"] * v2["comprimento"]
+                cap1 = (v1["largura"] * v1["comprimento"]) * f1
+                cap2 = (v2["largura"] * v2["comprimento"]) * f2
+
 
             cap_total = cap1 + cap2
-            peso_cap = v1["peso_max"] + v2["peso_max"]
+            cap_peso = (v1["peso_max"] * f1) + (v2["peso_max"] * f2)
+            peso_cap = cap_peso
 
             if valor_total > cap_total:
                 continue
@@ -1231,15 +1222,17 @@ def executar_calculo(cargas, df_veiculos, selecionados):
     
         # 🚫 REGRAS OPERACIONAIS (PESO / CAPACIDADE)
         
+        nome = veic["Veículo"]
+        
+        # capacidade base
         if empilhavel:
-            capacidade_max = veic["largura"] * veic["comprimento"] * veic["altura"]
+            capacidade_base = veic["largura"] * veic["comprimento"] * veic["altura"]
         else:
-            capacidade_max = veic["largura"] * veic["comprimento"]
+            capacidade_base = veic["largura"] * veic["comprimento"]
         
-        # ✅ NÃO bloquear veículo por tamanho
-        # todos participam → score decide
-        pass
-        
+        fator = get_fator(nome)
+        capacidade_max = capacidade_base * fator
+
         if status == "Viável":
             if peso_total > peso_max:
                 status = "Inviável"
@@ -1376,10 +1369,18 @@ def executar_calculo(cargas, df_veiculos, selecionados):
         if "Carreta" in nome and valor_total < 60:
             continue
     
+        nome = veic["Veículo"]
+        
+        # capacidade base
         if empilhavel:
-            capacidade_max = veic["largura"] * veic["comprimento"] * veic["altura"]
+            capacidade_base = veic["largura"] * veic["comprimento"] * veic["altura"]
         else:
-            capacidade_max = veic["largura"] * veic["comprimento"]
+            capacidade_base = veic["largura"] * veic["comprimento"]
+        
+        nome = veic["Veículo"]
+        fator = get_fator(nome)
+
+        capacidade_max = capacidade_base * fator
     
         peso_max = veic["peso_max"]
     
@@ -1605,21 +1606,28 @@ if st.button("🔍 Simular Empilhamento 3D"):
     )
 
     # Corte antecipado por volume impossível
+    fator = get_fator(melhor_veiculo)
+    
+    volume_veiculo = (
+        veic["largura"] * veic["comprimento"] * veic["altura"]
+    ) * fator
+    
     valor_total_caixas = sum(c["volume"] for c in cargas_unitarias)
-    volume_veiculo = veic["largura"] * veic["comprimento"] * veic["altura"]
-
+    
     if valor_total_caixas > volume_veiculo * 1.05:
         st.error("❌ O volume das caixas excede a capacidade física do veículo.")
         st.stop()
-
+    
     # Simulação 3D
     posicoes, caixas, volume_usado, peso_usado = simular_empilhamento_3d(
         cargas_unitarias,
         veic,
         qtd_total_real
     )
-
+    
+    # Agora sim calcula ocupação
     ocupacao = min(100, (volume_usado / volume_veiculo) * 100)
+
 
     st.subheader("📦 Resultado da Simulação 3D")
     st.write(f"Veículo: **{melhor_veiculo}**")
