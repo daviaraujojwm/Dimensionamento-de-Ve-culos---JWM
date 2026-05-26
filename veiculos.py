@@ -965,33 +965,30 @@ def gerar_cenarios_multi(cargas, df_veiculos, empilhavel=True, max_opcoes=5):
     cenarios = []
 
     veiculos_ordenados = df_veiculos.sort_values(
-        by="Capacidade Volume (m³)"
+        by="Capacidade Volume (m³)",
+        ascending=False   # 🔥 IMPORTANTE: começa dos grandes
     )
 
     for _, veic in veiculos_ordenados.iterrows():
-    
+
         nome = veic["Veículo"]
-    
-        # ✅ classificação mais inteligente por tipo
+
+        # eficiência por tipo
         if "Carreta" in nome:
             eficiencia = 0.85
-    
         elif "Bi-Truck" in nome or "Bitruck" in nome:
             eficiencia = 0.82
-    
         elif "Truck" in nome:
             eficiencia = 0.78
-    
         elif "3/4" in nome or "Toco" in nome:
             eficiencia = 0.77
-    
         elif "HR" in nome or "VUC" in nome:
             eficiencia = 0.75
-    
         else:
             eficiencia = 0.72
 
-        # capacidade
+        fator = get_fator(nome)
+
         if empilhavel:
             cap_vol = (
                 veic["largura"]
@@ -1003,10 +1000,7 @@ def gerar_cenarios_multi(cargas, df_veiculos, empilhavel=True, max_opcoes=5):
                 veic["largura"]
                 * veic["comprimento"]
             )
-    
-        # ✅ aplica eficiência nos DOIS
-        fator = get_fator(nome)
-        
+
         cap_vol *= eficiencia * fator
         cap_peso = veic["peso_max"] * eficiencia * fator
 
@@ -1014,41 +1008,54 @@ def gerar_cenarios_multi(cargas, df_veiculos, empilhavel=True, max_opcoes=5):
         qtd_por_peso = math.ceil(peso_total / cap_peso)
 
         qtd = max(qtd_por_volume, qtd_por_peso)
-        
-        if qtd <= 0 or qtd > 10:
-        
-            continue
-        # ✅ 🔥 impede MULTI com 1 veículo
-        if qtd == 1:
+
+        if qtd <= 1 or qtd > 10:
             continue
 
-        aproveitamento_vol = volume_total / (cap_vol * qtd)
-        aproveitamento_peso = peso_total / (cap_peso * qtd)
+        aproveitamento_vol = min(1, volume_total / (cap_vol * qtd))
+        aproveitamento_peso = min(1, peso_total / (cap_peso * qtd))
 
-        aproveitamento_vol = min(1, aproveitamento_vol)
-        aproveitamento_peso = min(1, aproveitamento_peso)
-
-        if aproveitamento_vol < 0.05:
+        if aproveitamento_vol < 0.1:
             continue
 
-        if volume_total < cap_vol * 0.2:
-            continue
+        # 🔥 NOVA INTELIGÊNCIA
+        fator_limitante = "VOLUME" if aproveitamento_vol > aproveitamento_peso else "PESO"
 
-        balanceamento = 1 - abs(aproveitamento_vol - aproveitamento_peso)
+        # penaliza muitos veículos
+        penalidade_qtd = qtd * 5
+
 
         score = (
             (aproveitamento_vol * 50) +
             (aproveitamento_peso * 30) +
-            (balanceamento * 20) -
-            (qtd * 1.2)
-        )
+            ((1 - abs(aproveitamento_vol - aproveitamento_peso)) * 20)
+        ) - penalidade_qtd
 
+        # ✅ CAPACIDADE REAL DO VEÍCULO (SEM FATOR/EFICIÊNCIA)
+        cap_vol_bruto = (
+            veic["largura"]
+            * veic["comprimento"]
+            * veic["altura"]
+        )
+        
+        peso_bruto = veic["peso_max"]
+        
+        # ✅ EXPLICAÇÃO CORRIGIDA
+        explicacao = (
+            f"A carga exige múltiplos veículos devido ao {fator_limitante.lower()} elevado.\n\n"
+            f"• Volume total ocupa {(volume_total / cap_vol_bruto) * 100:.1f}% de um único veículo\n"
+            f"• Peso total ocupa {(peso_total / peso_bruto) * 100:.1f}% da capacidade\n"
+            f"• Isso equivale a aproximadamente {volume_total / cap_vol_bruto:.1f} veículos completos\n\n"
+            f"✅ Configuração sugerida: {qtd}x {nome}\n"
+            f"🔎 Fator limitante: {fator_limitante}"
+        )
         cenarios.append({
-            "Veículo": veic["Veículo"],
-            "Configuração": f"{qtd}x {veic['Veículo']}",
+            "Veículo": nome,
+            "Configuração": f"{qtd}x {nome}",
             "Aproveitamento (%)": round(aproveitamento_vol * 100, 1),
             "Aproveitamento Peso (%)": round(aproveitamento_peso * 100, 1),
-            "Score": round(score, 2)
+            "Score": round(score, 2),
+            "Motivo": explicacao
         })
 
     df = pd.DataFrame(cenarios)
@@ -1072,14 +1079,8 @@ def dividir_carga_multi(cargas, df_veiculos, empilhavel=True):
     if df_multi.empty:
         return pd.DataFrame()
 
+    # ✅ mantém explicação já calculada em gerar_cenarios_multi
     df_multi["Status"] = "Viável"
-    df_multi["Motivo"] = df_multi.apply(
-        lambda row: (
-            f"A carga exige múltiplos veículos.\n"
-            f"Solução ideal: {row['Configuração']} para atender 100% do volume e peso."
-        ),
-        axis=1
-    )
     df_multi["Cenário"] = "MULTI"
 
     return df_multi
