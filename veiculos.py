@@ -586,8 +586,8 @@ def calcular_score(volume_usado, volume_max, peso_usado, peso_max):
 
     # ✅ score base
     score = (
-        (aproveitamento_volume * 0.55) +
-        (aproveitamento_peso * 0.30) +
+        (aproveitamento_volume * 0.45) +
+        (aproveitamento_peso * 0.40) +
         (balanceamento * 0.15)
     )
 
