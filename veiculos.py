@@ -905,78 +905,40 @@ def escolher_veiculo_unico_completo(cargas_unit, df_veiculos):
 
     peso_total = sum(c["peso"] for c in cargas_unit)
 
-    veiculos_ordenados = df_veiculos.sort_values(
-        by="Capacidade Volume (m³)",
-        ascending=True
+    melhor_score = -1
+    melhor_veiculo = None
+    
+    df_ordenado = df_veiculos.sort_values(
+        by="Capacidade Volume (m³)"
     )
+    for _, veic in df_veiculos.iterrows():
 
-    for _, veic in veiculos_ordenados.iterrows():
+        capacidade = (
+            veic["largura"]
+            * veic["comprimento"]
+            * veic["altura"]
+        ) * get_fator(veic["Veículo"])
 
-        nome = veic["Veículo"]
-        fator = get_fator(nome)
-
-        if empilhavel:
-            capacidade_base = veic["largura"] * veic["comprimento"] * veic["altura"]
-        else:
-            capacidade_base = veic["largura"] * veic["comprimento"]
-
-        capacidade_max = capacidade_base * fator
         peso_max = veic["peso_max"]
 
-        dimensoes_ok = True
+        # ✅ valida se cabe
+        if valor_total > capacidade or peso_total > peso_max:
+            continue
 
-        # ✅ valida TODAS as caixas
-        for item in cargas_unit:
+        # ✅ calcula score
+        score = calcular_score(
+            valor_total,
+            capacidade,
+            peso_total,
+            peso_max
+        )
 
-            cabe = False
+        # ✅ escolhe o melhor
+        if score > melhor_score:
+            melhor_score = score
+            melhor_veiculo = veic
 
-            for comp_i, larg_i, alt_i in itertools.permutations(
-                (item["comp"], item["larg"], item["alt"])
-            ):
-                if (
-                    comp_i <= veic["comprimento"]
-                    and larg_i <= veic["largura"]
-                    and alt_i <= veic["altura"]
-                ):
-                    cabe = True
-                    break
-
-            if not cabe:
-                dimensoes_ok = False
-                break
-
-        # ✅ valida capacidade total
-        if (
-            valor_total <= capacidade_max
-            and peso_total <= peso_max
-            and dimensoes_ok
-        ):
-        
-            # ✅ regras logísticas
-            if "Carreta" in nome:
-        
-                if valor_total < 80:
-                    continue
-        
-                if valor_total < capacidade_max * 0.8:
-                    continue
-        
-            elif "Truck" in nome or "Bi-Truck" in nome or "Bitruck" in nome:
-        
-                if valor_total < 25:
-                    continue
-        
-                if valor_total < capacidade_max * 0.5:
-                    continue
-        
-            else:
-                if valor_total < capacidade_max * 0.3:
-                    continue
-        
-            return veic
-
-
-    return None
+    return melhor_veiculo
 
 def gerar_cenarios_multi(cargas, df_veiculos, empilhavel=True, max_opcoes=5):
 
@@ -1305,15 +1267,9 @@ def executar_calculo(cargas, df_veiculos, selecionados):
 
     if veic_unico is not None:
     
-        # 🔥 trava final de hierarquia (ANTI-CARRETA DESNECESSÁRIA)
-        if "Carreta" in veic_unico["Veículo"]:
-        
-            # bloqueia carreta se houver opção menor plausível
-            if valor_total < 60:
-                veic_unico = None
-    
-    if veic_unico is not None:
-    
+        # =========================
+        # CAPACIDADE DO VEÍCULO
+        # =========================
         if empilhavel:
             capacidade = (
                 veic_unico["largura"]
@@ -1326,42 +1282,34 @@ def executar_calculo(cargas, df_veiculos, selecionados):
                 * veic_unico["comprimento"]
             )
     
+        # =========================
+        # APROVEITAMENTO
+        # =========================
         aproveitamento_vol = (valor_total / capacidade) * 100
         aproveitamento_peso = (peso_total / veic_unico["peso_max"]) * 100
     
-        # 🔥 AJUSTE INTELIGENTE FINAL + BLOQUEIO DE CARRETA
-        if valor_total < 10:
-            usar_unico = True
-        else:
+        # =========================
+        # SCORE
+        # =========================
+        score = calcular_score(
+            valor_total,
+            capacidade,
+            peso_total,
+            veic_unico["peso_max"]
+        )
     
-            # 🚫 bloqueia carreta desnecessária
-            if "Carreta" in veic_unico["Veículo"]:
-            
-                if valor_total < 60:
-                    usar_unico = False
-            
-                elif aproveitamento_peso < 30:
-                    usar_unico = False
-            else:
-                usar_unico = (aproveitamento_vol >= 35)
-    
-        if usar_unico:
-            score = calcular_score(
-                valor_total,
-                capacidade,
-                peso_total,
-                veic_unico["peso_max"]
-            )
-    
-            return pd.DataFrame([{
-                "Veículo": veic_unico["Veículo"],
-                "Status": "Viável",
-                "Motivo": "Menor veículo compatível",
-                "Cenário": "UNICO",
-                "Aproveitamento (%)": round(aproveitamento_vol, 2),
-                "Aproveitamento Peso (%)": round(aproveitamento_peso, 2),
-                "Score": score
-            }]), {"cenario": "UNICO"}
+        # =========================
+        # RETORNO FINAL
+        # =========================
+        return pd.DataFrame([{
+            "Veículo": veic_unico["Veículo"],
+            "Status": "Viável",
+            "Motivo": "Melhor aproveitamento geral",
+            "Cenário": "UNICO",
+            "Aproveitamento (%)": round(aproveitamento_vol, 2),
+            "Aproveitamento Peso (%)": round(aproveitamento_peso, 2),
+            "Score": score
+        }]), {"cenario": "UNICO"}
 
     # ==========================
     # ✅ RANKING
@@ -1369,12 +1317,6 @@ def executar_calculo(cargas, df_veiculos, selecionados):
     ranking = []
     
     for _, veic in df_testar.iterrows():
-    
-        nome = veic["Veículo"]
-    
-        # 🔥 bloqueio de carreta no ranking
-        if "Carreta" in nome and valor_total < 60:
-            continue
     
         nome = veic["Veículo"]
         
@@ -1393,10 +1335,6 @@ def executar_calculo(cargas, df_veiculos, selecionados):
     
         # remove inviáveis
         if peso_total > peso_max or valor_total > capacidade_max:
-            continue
-    
-        # 🔥 trava ranking (evita veículos grandes desnecessários)
-        if valor_total < (capacidade_max * 0.8) * 0.25:
             continue
     
         aproveitamento_vol = (valor_total / capacidade_max) * 100
