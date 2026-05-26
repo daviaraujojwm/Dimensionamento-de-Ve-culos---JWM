@@ -951,23 +951,30 @@ def escolher_veiculo_unico_completo(cargas_unit, df_veiculos):
             and peso_total <= peso_max
             and dimensoes_ok
         ):
-
+        
             # ✅ regras logísticas
             if "Carreta" in nome:
-                if valor_total < 60:
+        
+                if valor_total < 80:
                     continue
+        
                 if valor_total < capacidade_max * 0.8:
                     continue
-
+        
             elif "Truck" in nome or "Bi-Truck" in nome or "Bitruck" in nome:
+        
+                if valor_total < 25:
+                    continue
+        
                 if valor_total < capacidade_max * 0.5:
                     continue
-
+        
             else:
                 if valor_total < capacidade_max * 0.3:
                     continue
-
+        
             return veic
+
 
     return None
 
