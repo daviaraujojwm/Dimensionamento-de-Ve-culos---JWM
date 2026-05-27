@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 from io import BytesIO
 import plotly.graph_objects as go
-import itertools
 import math
 
 
@@ -14,8 +13,8 @@ st.set_page_config(
 
 MAX_CAIXAS = 300
 MAX_CAIXAS_3D = 200
-MAX_ITERACOES = 5000
-MAX_GRID = 10000
+MAX_ITERACOES = 12000
+MAX_GRID = 6000
 
 st.markdown("""
 <style>
@@ -52,9 +51,7 @@ st.markdown("""
 
     padding: 20px 25px;
 
-    background: rgba(255, 255, 255, 0.085);
-    backdrop-filter: blur(2px);
-    -webkit-backdrop-filter: blur(2px);
+    background: rgba(20,20,20,0.35);
 
     border-radius: 18px;
     border: 1px solid rgba(255,255,255,0.2);
@@ -156,9 +153,6 @@ if "df_result" not in st.session_state or not isinstance(st.session_state.df_res
         "Score"
     ])
     
-if "veiculo_simulado" not in st.session_state:
-    st.session_state.veiculo_simulado = None
-
 # ============================
 # SIDEBAR
 # ============================
@@ -207,14 +201,16 @@ lista_veiculos = [
 @st.cache_data
 def get_veiculos():
     df = pd.DataFrame(lista_veiculos)
-    df["Capacidade Volume (m³)"] = (
+    df["Volume Bruto"] = (
         df["largura"] * df["comprimento"] * df["altura"]
+    )
+    
+    df["Area Piso"] = (
+        df["largura"] * df["comprimento"]
     )
     df.rename(columns={"nome": "Veículo"}, inplace=True)
     return df
-
-df_veiculos = get_veiculos()
-
+    
 # ============================
 # FUNÇÃO GLOBAL DE FATOR
 # ============================
@@ -232,7 +228,6 @@ def get_fator(nome):
         return 0.82
 
 
-# ✅ ✅ 👇 COLOCA EXATAMENTE AQUI
 def get_eficiencia(nome):
     if "Carreta" in nome:
         return 0.85
@@ -246,25 +241,32 @@ def get_eficiencia(nome):
         return 0.75
     else:
         return 0.72
+        
+df_veiculos = get_veiculos()
+
+df_veiculos["fator"] = (
+    df_veiculos["Veículo"].apply(get_fator)
+)
+
+df_veiculos["eficiencia"] = (
+    df_veiculos["Veículo"].apply(get_eficiencia)
+)
+
+# =====================================
+# HELPER GLOBAL DE VOLUME
+# =====================================
+def volume_veiculo(veic):
+    return (
+        veic["largura"]
+        * veic["comprimento"]
+        * veic["altura"]
+    )
 
 # ============================
 # SESSION STATE
 # ============================
 if "cargas" not in st.session_state:
     st.session_state.cargas = []
-
-# ============================
-# RESET DE INPUTS
-# ============================
-if st.session_state.get("clear_inputs"):
-    st.session_state.update({
-        "comp": "",
-        "larg": "",
-        "alt": "",
-        "peso": "",
-        "qtd": 1
-    })
-    st.session_state.clear_inputs = False
 
 # ============================
 # TÍTULO
@@ -275,9 +277,8 @@ with col1:
 with col2:
     try:
         st.image("JWM.png", width=80)
-    except:
-        pass
-
+    except Exception:
+        st.warning("Logo JWM não encontrada.")
 # ============================
 # INPUTS CARGA
 # ============================
@@ -290,16 +291,32 @@ col1, col2, col3, col4, col5 = st.columns(
 )
 
 with col1:
-    comp_txt = st.text_input("Comprimento (m)", placeholder="ex: 1,20 ou 1.20")
+    comp_txt = st.text_input(
+        "Comprimento (m)",
+        key="comp",
+        placeholder="ex: 1,20 ou 1.20"
+    )
 
 with col2:
-    larg_txt = st.text_input("Largura (m)", placeholder="ex: 0,80 ou 0.80")
+    larg_txt = st.text_input(
+        "Largura (m)",
+        key="larg",
+        placeholder="ex: 0,80 ou 0.80"
+    )
 
 with col3:
-    alt_txt = st.text_input("Altura (m)", placeholder="ex: 1,00")
+    alt_txt = st.text_input(
+        "Altura (m)",
+        key="alt",
+        placeholder="ex: 1,00"
+    )
 
 with col4:
-    peso_txt = st.text_input("Peso unitário (kg)", placeholder="ex: 15,5")
+    peso_txt = st.text_input(
+        "Peso unitário (kg)",
+        key="peso",
+        placeholder="ex: 15,5"
+    )
 
 with col5:
     qtd = st.number_input("Quantidade:", min_value=1, value=1, step=1)
@@ -313,8 +330,8 @@ def parse_float(valor):
         valor = str(valor).strip().replace(",", ".")
         if valor == "":
             return None
-        return float(valor)
-    except:
+        return round(float(valor), 4)
+    except Exception as e:
         return None
 
 # 🔥 SÓ DEPOIS DISSO
@@ -330,6 +347,7 @@ def validar_inputs(comp, larg, alt, peso, qtd=None):
     Valida dimensões, peso e quantidade da carga.
     Retorna lista de erros (vazia se válido).
     """
+
     erros = []
 
     def invalido(valor):
@@ -338,15 +356,29 @@ def validar_inputs(comp, larg, alt, peso, qtd=None):
         except:
             return True
 
+    # Comprimento
     if invalido(comp):
         erros.append("Comprimento inválido")
+    elif comp < 0.01:
+        erros.append("Comprimento muito pequeno")
+
+    # Largura
     if invalido(larg):
         erros.append("Largura inválida")
+    elif larg < 0.01:
+        erros.append("Largura muito pequena")
+
+    # Altura
     if invalido(alt):
         erros.append("Altura inválida")
+    elif alt < 0.01:
+        erros.append("Altura muito pequena")
+
+    # Peso
     if invalido(peso):
         erros.append("Peso inválido")
 
+    # Quantidade
     if qtd is not None:
         try:
             if int(qtd) <= 0:
@@ -402,6 +434,35 @@ if st.button("➕ Adicionar carga", disabled=not pode_adicionar):
     st.rerun()
 
 # ============================
+# RESET DE INPUTS
+# ============================
+if "comp" not in st.session_state:
+    st.session_state["comp"] = ""
+
+if "larg" not in st.session_state:
+    st.session_state["larg"] = ""
+
+if "alt" not in st.session_state:
+    st.session_state["alt"] = ""
+
+if "peso" not in st.session_state:
+    st.session_state["peso"] = ""
+
+if "qtd" not in st.session_state:
+    st.session_state["qtd"] = 1
+
+if "clear_inputs" not in st.session_state:
+    st.session_state.clear_inputs = False
+
+if st.session_state.clear_inputs:
+    st.session_state["comp"] = ""
+    st.session_state["larg"] = ""
+    st.session_state["alt"] = ""
+    st.session_state["peso"] = ""
+    st.session_state["qtd"] = 1
+    st.session_state.clear_inputs = False
+    
+# ============================
 # LISTA E EDIÇÃO DE CARGAS
 # ============================
 
@@ -443,7 +504,7 @@ if st.session_state.cargas:
                         larg = float(row["Largura (m)"])
                         alt = float(row["Altura (m)"])
                         peso = float(row["Peso unitário (kg)"])
-                    except:
+                    except Exception as e:
                         raise ValueError("Valores inválidos na tabela.")
                     
                     if comp <= 0 or larg <= 0 or alt <= 0:
@@ -456,7 +517,7 @@ if st.session_state.cargas:
                     
                     try:
                         qtd_row = int(row["Quantidade"])
-                    except:
+                    except Exception as e:
                         raise ValueError("Quantidade inválida.")
                                         
                     if qtd_row <= 0:
@@ -523,7 +584,7 @@ def expand_cargas_unitarias(cargas, limite=MAX_CAIXAS):
             larg = float(c["Largura (m)"])
             alt = float(c["Altura (m)"])
             peso = float(c["Peso unitário (kg)"])
-        except:
+        except Exception as e:
             continue
 
         if qtd <= 0 or min(comp, larg, alt, peso) <= 0:
@@ -542,6 +603,25 @@ def expand_cargas_unitarias(cargas, limite=MAX_CAIXAS):
             })
 
     return lista
+
+def agrupar_em_pallets(cargas_unit, max_por_pallet=10):
+
+    pallets = []
+
+    grupo = []
+
+    for caixa in cargas_unit:
+
+        grupo.append(caixa)
+
+        if len(grupo) >= max_por_pallet:
+            pallets.append(grupo)
+            grupo = []
+
+    if grupo:
+        pallets.append(grupo)
+
+    return pallets
 
 def calcular_totais(cargas, empilhavel=True):
 
@@ -623,6 +703,10 @@ def calcular_score(volume_usado, volume_max, peso_usado, peso_max):
     # 🚫 evita veículo cheio de ar (volume alto e peso irrelevante)
     if aproveitamento_peso < 5 and aproveitamento_volume > 80:
         return 0
+        
+    # penaliza capacidade exagerada
+    if volume_max > volume_usado * 3:
+        score -= 35
 
     return max(0, round(score, 2))
 
@@ -642,7 +726,7 @@ def escolher_veiculo_unico_completo(cargas_unit, df_veiculos):
     melhor_veiculo = None
 
     df_ordenado = df_veiculos.sort_values(
-        by="Capacidade Volume (m³)"
+        by="Volume Bruto"
     )
 
     max_comp = max(c["comp"] for c in cargas_unit)
@@ -663,9 +747,7 @@ def escolher_veiculo_unico_completo(cargas_unit, df_veiculos):
         eficiencia = get_eficiencia(veic["Veículo"])
         
         capacidade = (
-            veic["largura"]
-            * veic["comprimento"]
-            * veic["altura"]
+            volume_veiculo(veic)
         ) * eficiencia * fator
 
         peso_max = veic["peso_max"]
@@ -681,9 +763,7 @@ def escolher_veiculo_unico_completo(cargas_unit, df_veiculos):
             continue
 
         capacidade_bruta = (
-            veic["largura"]
-            * veic["comprimento"]
-            * veic["altura"]
+        volume_veiculo(veic)
         )
         
         # 🔥 penaliza veículo grande quando sobra muito espaço
@@ -692,12 +772,47 @@ def escolher_veiculo_unico_completo(cargas_unit, df_veiculos):
         else:
             score_penalidade = 0
         
+        # =========================================
+        # VALIDAÇÃO FÍSICA REAL (3D)
+        # =========================================
+        
+        cargas_reduzidas = reduzir_cargas_para_simulacao(
+            [
+                {
+                    "Comprimento (m)": c["comp"],
+                    "Largura (m)": c["larg"],
+                    "Altura (m)": c["alt"],
+                    "Peso unitário (kg)": c["peso"],
+                    "Quantidade": 1
+                }
+                for c in cargas_unit
+            ],
+            MAX_CAIXAS_3D
+        )
+        
+        posicoes, caixas_alocadas, volume_usado_3d, peso_usado_3d = simular_empilhamento_3d(
+            cargas_reduzidas,
+            veic,
+            len(cargas_reduzidas)
+        )
+        
+        # 🚫 NÃO coube fisicamente
+        if caixas_alocadas < len(cargas_reduzidas):
+            continue
+        
+        # =========================================
+        # SCORE REAL
+        # =========================================
+        
         score = calcular_score(
             valor_total,
             capacidade,
             peso_total,
             peso_max
         ) - score_penalidade
+        
+        # bônus por validação física real
+        score += 12
 
         if score > melhor_score:
             melhor_score = score
@@ -764,7 +879,10 @@ def reduzir_cargas_para_simulacao(cargas, limite):
     Reduz o número de caixas para simulação 3D
     preservando proporções e dimensões.
     """
-    todas = expand_cargas_unitarias(cargas, limite=10**9)
+    todas = expand_cargas_unitarias(
+        cargas,
+        limite=max(limite * 3, 5000)
+    )
 
     if len(todas) <= limite:
         return todas
@@ -784,9 +902,6 @@ def reduzir_cargas_para_simulacao(cargas, limite):
 # EXPORTAR RESULTADOS PARA EXCEL
 # ============================
 def gerar_excel_bytes(df_result, cargas):
-
-    from io import BytesIO
-    import pandas as pd
 
     out = BytesIO()
 
@@ -854,7 +969,7 @@ def cabe_no_piso_heuristica(items, comp_v, larg_v, alt_v):
                 break
 
             # Cria nova camada (empilhamento)
-            if altura_usada + it["alt"] <= alt_v * 0.98:
+            if altura_usada + it["alt"] <= alt_v:
                 camadas.append({"len": comp_i})
                 altura_usada += it["alt"]
                 colocado = True
@@ -894,6 +1009,27 @@ def tem_base(nova, ocupadas):
 
     return False
 
+def calcular_centro_massa(posicoes):
+    if not posicoes:
+        return 0
+
+    soma = 0
+    peso_total = 0
+
+    for x, y, z, c, l, a in posicoes:
+        centro_x = x + (c / 2)
+
+        volume = c * l * a
+        peso = volume * 100
+
+        soma += centro_x * peso
+        peso_total += peso
+
+    if peso_total == 0:
+        return 0
+
+    return soma / peso_total
+    
 def simular_empilhamento_3d(
     cargas_unitarias,
     veiculo,
@@ -927,10 +1063,27 @@ def simular_empilhamento_3d(
         if item["peso"] <= 0:
             continue
 
+        # =========================================
+        # ORIENTAÇÕES ÚNICAS (REMOVE DUPLICADAS)
+        # =========================================
         
-        orientacoes = list(itertools.permutations(
-            (item["comp"], item["larg"], item["alt"])
-        ))
+        orientacoes = {
+            (
+                round(item["comp"], 4),
+                round(item["larg"], 4),
+                round(item["alt"], 4)
+            ),
+            (
+                round(item["comp"], 4),
+                round(item["alt"], 4),
+                round(item["larg"], 4)
+            ),
+            (
+                round(item["larg"], 4),
+                round(item["comp"], 4),
+                round(item["alt"], 4)
+            )
+        }
 
 
         for comp_o, larg_o, alt_o in orientacoes:
@@ -939,7 +1092,7 @@ def simular_empilhamento_3d(
                 x_max = int(comp_veic // comp_o)
                 y_max = int(larg_veic // larg_o)
                 z_max = int(alt_veic // alt_o)
-            except:
+            except Exception as e:
                 continue
 
             grid_size = x_max * y_max * z_max
@@ -952,7 +1105,18 @@ def simular_empilhamento_3d(
                 y_max = max(1, int(y_max / fator))
                 z_max = max(1, int(z_max / fator))
 
-            step = 1
+            # =========================================
+            # STEP DINÂMICO (MELHORA PERFORMANCE)
+            # =========================================
+            
+            menor_dim = min(comp_o, larg_o)
+            
+            if menor_dim >= 1:
+                step = 1
+            elif menor_dim >= 0.5:
+                step = 2
+            else:
+                step = 3
 
             # ================================
             # ✅ LOOP EM CAMADAS (Z FORÇADO)
@@ -961,8 +1125,19 @@ def simular_empilhamento_3d(
             alturas_camadas = [i * alt_o for i in range(z_max)]
             
             for z in alturas_camadas:
+            
+                if caixas_alocadas >= qtd_total_real:
+                    break
+            
                 for x in range(0, x_max, step):
+            
+                    if caixas_alocadas >= qtd_total_real:
+                        break
+            
                     for y in range(0, y_max, step):
+            
+                        if caixas_alocadas >= qtd_total_real:
+                            break
 
                         contador += 1
                         if contador > limite_iter:
@@ -998,6 +1173,11 @@ def simular_empilhamento_3d(
                     break
 
     volume_usado = sum(c * l * a for (_, _, _, c, l, a) in posicoes_ocupadas)
+    centro = calcular_centro_massa(posicoes_ocupadas)
+
+    # evita concentração extrema
+    if centro > comp_veic * 0.80:
+        caixas_alocadas = 0
 
     return posicoes_ocupadas, caixas_alocadas, volume_usado, peso_acumulado
 
@@ -1015,8 +1195,8 @@ def gerar_cenarios_multi(cargas, df_veiculos, empilhavel=True, max_opcoes=5):
     cenarios = []
 
     veiculos_ordenados = df_veiculos.sort_values(
-        by="Capacidade Volume (m³)",
-        ascending=False   # 🔥 IMPORTANTE: começa dos grandes
+        by="Volume Bruto",
+        ascending=False
     )
 
     for _, veic in veiculos_ordenados.iterrows():
@@ -1030,9 +1210,7 @@ def gerar_cenarios_multi(cargas, df_veiculos, empilhavel=True, max_opcoes=5):
 
         if empilhavel:
             cap_vol = (
-                veic["largura"]
-                * veic["comprimento"]
-                * veic["altura"]
+                volume_veiculo(veic)
             )
         else:
             cap_vol = (
@@ -1048,7 +1226,11 @@ def gerar_cenarios_multi(cargas, df_veiculos, empilhavel=True, max_opcoes=5):
 
         qtd = max(qtd_por_volume, qtd_por_peso)
 
-        if qtd <= 1 or qtd > 20:
+        if qtd <= 1:
+            continue
+        
+        # evita explosões absurdas
+        if qtd > 50:
             continue
         
         if qtd >= 3:
@@ -1062,8 +1244,9 @@ def gerar_cenarios_multi(cargas, df_veiculos, empilhavel=True, max_opcoes=5):
         if aproveitamento_vol < 0.02:
             continue
         
-        if aproveitamento_peso < 0.2 and qtd >= 2:
+        if aproveitamento_peso < 0.1 and qtd >= 2:
             continue
+
                 
         # 🔥 NOVA INTELIGÊNCIA
         fator_limitante = "VOLUME" if aproveitamento_vol > aproveitamento_peso else "PESO"
@@ -1088,9 +1271,7 @@ def gerar_cenarios_multi(cargas, df_veiculos, empilhavel=True, max_opcoes=5):
 
         # ✅ CAPACIDADE REAL DO VEÍCULO (SEM FATOR/EFICIÊNCIA)
         cap_vol_bruto = (
-            veic["largura"]
-            * veic["comprimento"]
-            * veic["altura"]
+            volume_veiculo(veic)
         )
         
         peso_bruto = veic["peso_max"]
@@ -1152,6 +1333,13 @@ def gerar_combinacoes(df_testar, valor_total, peso_total, empilhavel):
                 continue
 
             chave = tuple(sorted([v1["Veículo"], v2["Veículo"]]))
+            categoria_1 = v1["Veículo"].split()[0]
+            categoria_2 = v2["Veículo"].split()[0]
+            
+            # evita misturas absurdas
+            if categoria_1 != categoria_2:
+                continue
+                
             if chave in usados:
                 continue
             usados.add(chave)
@@ -1179,7 +1367,7 @@ def gerar_combinacoes(df_testar, valor_total, peso_total, empilhavel):
             cap_peso = (v1["peso_max"] * f1) + (v2["peso_max"] * f2)
             peso_cap = cap_peso
 
-            if valor_total > cap_total:
+            if valor_total > cap_total * 1.25:
                 continue
 
             if peso_total > peso_cap * 1.3:
@@ -1187,16 +1375,19 @@ def gerar_combinacoes(df_testar, valor_total, peso_total, empilhavel):
 
             aproveitamento_vol = valor_total / cap_total * 100
             aproveitamento_peso = peso_total / peso_cap * 100
-
-            if aproveitamento_vol < 30:
+            
+            if aproveitamento_vol < 10:
                 continue
 
             score = (
-                (aproveitamento_vol * 0.55)
-                + (aproveitamento_peso * 0.30)
+                (aproveitamento_vol * 0.50)
+                + (aproveitamento_peso * 0.25)
                 + ((100 - abs(aproveitamento_vol - aproveitamento_peso)) * 0.15)
             )
-
+            
+            # penaliza combo
+            score -= 10
+            
             combos.append({
                 "Veículo": f'{v1["Veículo"]} + {v2["Veículo"]}',
                 "Status": "Viável",
@@ -1420,8 +1611,11 @@ def executar_calculo(cargas, df_veiculos, selecionados):
     
         peso_max = veic["peso_max"]
     
-        # remove inviáveis
-        if peso_total > peso_max or valor_total > capacidade_max:
+        # remove apenas absurdamente inviáveis
+        if peso_total > peso_max * 3:
+            continue
+        
+        if valor_total > capacidade_max * 3:
             continue
     
         aproveitamento_vol = min(100, (valor_total / capacidade_max) * 100)
@@ -1437,7 +1631,11 @@ def executar_calculo(cargas, df_veiculos, selecionados):
             peso_total,
             peso_max
         )
-    
+        
+        # 🚫 remove lixo do ranking
+        if score == 0:
+            continue
+            
         ranking.append({
             "Veículo": veic["Veículo"],
             "Status": "Viável",
@@ -1457,8 +1655,56 @@ def executar_calculo(cargas, df_veiculos, selecionados):
             ascending=False
         ).reset_index(drop=True)
     
-        return df_rank, {"cenario": "RANKING"}
+        melhor_rank = df_rank.iloc[[0]]
     
+    else:
+        melhor_rank = pd.DataFrame()
+
+
+    # ==========================================
+    # FALLBACK ABSOLUTO
+    # ==========================================
+    
+    if df_rank.empty:
+    
+        fallback = []
+    
+        for _, veic in df_testar.iterrows():
+    
+            nome = veic["Veículo"]
+    
+            volume_base = (
+                  volume_veiculo(veic)
+            )
+    
+            fator = get_fator(nome)
+            eficiencia = get_eficiencia(nome)
+    
+            capacidade = volume_base * fator * eficiencia
+    
+            aproveitamento = (
+                valor_total / capacidade * 100
+                if capacidade > 0 else 0
+            )
+    
+            aproveitamento_peso = (
+                peso_total / veic["peso_max"] * 100
+                if veic["peso_max"] > 0 else 0
+            )
+    
+            fallback.append({
+                "Veículo": nome,
+                "Status": "Limitado",
+                "Motivo": "Necessita operação especial",
+                "Cenário": "FALLBACK",
+                "Aproveitamento (%)": round(aproveitamento, 2),
+                "Aproveitamento Peso (%)": round(aproveitamento_peso, 2),
+                "Score": 1
+            })
+    
+        df_rank = pd.DataFrame(fallback)
+        
+        return df_rank, {"cenario": "RANKING"}
     
     # ==========================
     # ✅ MULTI + COMBO UNIFICADO
@@ -1468,7 +1714,7 @@ def executar_calculo(cargas, df_veiculos, selecionados):
         df_testar,
         empilhavel
     )
-
+    
     df_combo = gerar_combinacoes(
         df_testar,
         valor_total,
@@ -1481,6 +1727,7 @@ def executar_calculo(cargas, df_veiculos, selecionados):
         ignore_index=True
     )
     
+    # ✅ MULTI PRINCIPAL
     if not df_multi_unificado.empty:
     
         df_multi_unificado = df_multi_unificado.sort_values(
@@ -1488,11 +1735,21 @@ def executar_calculo(cargas, df_veiculos, selecionados):
             ascending=False
         ).reset_index(drop=True)
     
-        # 🔥 pega automaticamente o melhor cenário
         melhor = df_multi_unificado.iloc[[0]]
     
         return melhor, {"cenario": "MULTI"}
     
+    
+    # 🔥 AJUSTE 2 — GARANTE MULTI
+    df_multi_real = dividir_carga_multi(
+        cargas,
+        df_testar,
+        empilhavel
+    )
+    
+    if not df_multi_real.empty:
+        melhor = df_multi_real.sort_values(by="Score", ascending=False).iloc[[0]]
+        return melhor, {"cenario": "MULTI"}
 
     # ✅ 3 — FALLBACK (nunca ficar vazio)
     # Se chegamos aqui, significa que não houve veículo "Viável" 100%
@@ -1656,27 +1913,46 @@ if st.button("🔍 Simular Empilhamento 3D"):
     # Corte antecipado por volume impossível
     fator = get_fator(melhor_veiculo)
     
-    volume_veiculo = (
-        veic["largura"] * veic["comprimento"] * veic["altura"]
-    )
+    volume_total_veiculo = volume_veiculo(veic)
     
     valor_total_real = sum(
         c["Volume total (m³)"] for c in st.session_state.cargas
     )
     
-    if valor_total_real > volume_veiculo * 1.05:
-        st.error("❌ O volume das caixas excede a capacidade física do veículo.")
-        st.stop()
+def get_fator_combo(nome):
+    partes = nome.split(" + ")
+    fatores = [get_fator(p) for p in partes]
+    return min(fatores)
 
-    # Simulação 3D
-    posicoes, caixas, volume_usado, peso_usado = simular_empilhamento_3d(
-        cargas_unitarias,
-        veic,
-        qtd_total_real
-    )
+
+def get_eficiencia_combo(nome):
+    partes = nome.split(" + ")
+    eficiencias = [get_eficiencia(p) for p in partes]
+    return min(eficiencias)
+    
+if " + " in melhor_veiculo:
+    fator = get_fator_combo(melhor_veiculo)
+    eficiencia = get_eficiencia_combo(melhor_veiculo)
+else:
+    fator = get_fator(melhor_veiculo)
+    eficiencia = get_eficiencia(melhor_veiculo)
+
+volume_ajustado = volume_total_veiculo * eficiencia * fator
+
+if valor_total_real > volume_ajustado:
+
+    st.error("❌ O volume das caixas excede a capacidade física do veículo.")
+    st.stop()
+
+# Simulação 3D
+posicoes, caixas, volume_usado, peso_usado = simular_empilhamento_3d(
+    cargas_unitarias,
+    veic,
+    qtd_total_real
+)
     
     # Agora sim calcula ocupação
-    ocupacao = min(100, (volume_usado / volume_veiculo) * 100)
+    ocupacao = min(100, (volume_usado / volume_total_veiculo) * 100)
 
 
     st.subheader("📦 Resultado da Simulação 3D")
@@ -1696,27 +1972,45 @@ if st.button("🔍 Simular Empilhamento 3D"):
     fig = go.Figure()
     cores = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728"]
 
-    for i, (x, y, z, c, l, a) in enumerate(posicoes[:150]):
-        fig.add_trace(go.Mesh3d(
+    MAX_BOXES_RENDER = 20
+
+    for i, (x, y, z, c, l, a) in enumerate(
+        posicoes[:MAX_BOXES_RENDER]
+    ):
+        
+        fig.add_trace(go.Scatter3d(
             x=[x, x+c, x+c, x, x, x+c, x+c, x],
             y=[y, y, y+l, y+l, y, y, y+l, y+l],
             z=[z, z, z, z, z+a, z+a, z+a, z+a],
-            color=cores[i % len(cores)],
-            opacity=0.9,
-            showscale=False
+            mode="markers",
+            marker=dict(
+                size=4,
+                color=cores[i % len(cores)],
+                opacity=0.9
+            ),
+            showlegend=False
         ))
 
     # Caixa do veículo
-    fig.add_trace(go.Mesh3d(
+    fig.add_trace(go.Scatter3d(
         x=[0, veic["comprimento"], veic["comprimento"], 0,
            0, veic["comprimento"], veic["comprimento"], 0],
+    
         y=[0, 0, veic["largura"], veic["largura"],
            0, 0, veic["largura"], veic["largura"]],
+    
         z=[0, 0, 0, 0,
            veic["altura"], veic["altura"], veic["altura"], veic["altura"]],
-        color="gray",
-        opacity=0.05,
-        showscale=False
+    
+        mode="markers",
+    
+        marker=dict(
+            size=2,
+            color="gray",
+            opacity=0.05
+        ),
+    
+        showlegend=False
     ))
 
     fig.update_layout(
