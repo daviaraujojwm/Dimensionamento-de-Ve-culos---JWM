@@ -669,11 +669,15 @@ def escolher_veiculo_unico_completo(cargas_unit, df_veiculos):
         ) * eficiencia * fator
 
         peso_max = veic["peso_max"]
-
+        
         if valor_total > capacidade * 1.10:
             continue
         
         if peso_total > peso_max:
+            continue
+        
+        # 🚫 BLOQUEIA VEÍCULO COM PESO IRRELEVANTE
+        if (peso_total / peso_max) * 100 < 5:
             continue
 
         capacidade_bruta = (
@@ -1055,7 +1059,7 @@ def gerar_cenarios_multi(cargas, df_veiculos, empilhavel=True, max_opcoes=5):
         
         aproveitamento_peso = min(1, peso_total / (cap_peso * qtd))
         
-        if aproveitamento_vol < 0.05:
+        if aproveitamento_vol < 0.02:
             continue
         
         if aproveitamento_peso < 0.2 and qtd >= 2:
@@ -1096,7 +1100,7 @@ def gerar_cenarios_multi(cargas, df_veiculos, empilhavel=True, max_opcoes=5):
             f"A carga exige múltiplos veículos devido ao {fator_limitante.lower()} elevado.\n\n"
             f"• Volume total ocupa {(volume_total / cap_vol_bruto) * 100:.1f}% de um único veículo\n"
             f"• Peso total ocupa {(peso_total / peso_bruto) * 100:.1f}% da capacidade\n"
-            f"• Isso equivale a aproximadamente {volume_total / cap_vol_bruto:.1f} veículos completos\n\n"
+            f"• Isso equivale a aproximadamente {volume_total / cap_vol:.1f} veículos completos\n\n"
             f"✅ Configuração sugerida: {qtd}x {nome}\n"
             f"🔎 Fator limitante: {fator_limitante}"
         )
