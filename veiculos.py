@@ -619,6 +619,10 @@ def calcular_score(volume_usado, volume_max, peso_usado, peso_max):
     # 🔥 penaliza veículo grande subutilizado
     if volume_max > 30 and aproveitamento_volume < 50:
         score -= 20
+        
+    # 🚫 evita veículo cheio de ar (volume alto e peso irrelevante)
+    if aproveitamento_peso < 5 and aproveitamento_volume > 80:
+        return 0
 
     return max(0, round(score, 2))
 
@@ -1016,18 +1020,7 @@ def gerar_cenarios_multi(cargas, df_veiculos, empilhavel=True, max_opcoes=5):
         nome = veic["Veículo"]
 
         # eficiência por tipo
-        if "Carreta" in nome:
-            eficiencia = 0.85
-        elif "Bi-Truck" in nome or "Bitruck" in nome:
-            eficiencia = 0.82
-        elif "Truck" in nome:
-            eficiencia = 0.78
-        elif "3/4" in nome or "Toco" in nome:
-            eficiencia = 0.77
-        elif "HR" in nome or "VUC" in nome:
-            eficiencia = 0.75
-        else:
-            eficiencia = 0.72
+        eficiencia = get_eficiencia(nome)
 
         fator = get_fator(nome)
 
@@ -1051,7 +1044,7 @@ def gerar_cenarios_multi(cargas, df_veiculos, empilhavel=True, max_opcoes=5):
 
         qtd = max(qtd_por_volume, qtd_por_peso)
 
-        if qtd <= 1 or qtd > 10:
+        if qtd <= 1 or qtd > 20:
             continue
         
         if qtd >= 3:
@@ -1062,7 +1055,7 @@ def gerar_cenarios_multi(cargas, df_veiculos, empilhavel=True, max_opcoes=5):
         
         aproveitamento_peso = min(1, peso_total / (cap_peso * qtd))
         
-        if aproveitamento_vol < 0.1:
+        if aproveitamento_vol < 0.05:
             continue
         
         if aproveitamento_peso < 0.2 and qtd >= 2:
@@ -1314,13 +1307,10 @@ def executar_calculo(cargas, df_veiculos, selecionados):
     
         if not df_multi.empty:
         
-            df_multi = df_multi.sort_values(by="Score", ascending=False).reset_index(drop=True)
-        
-            # 🔥 seleciona apenas a melhor opção
-            melhor = df_multi.iloc[[0]]
-        
-            return melhor, {"cenario": "MULTI"}
+            melhor = df_multi.sort_values(by="Score", ascending=False).iloc[[0]]
             
+            return melhor, {"cenario": "MULTI"}
+
         return pd.DataFrame([{
             "Veículo": "Nenhum",
             "Status": "Inviável",
@@ -1432,6 +1422,10 @@ def executar_calculo(cargas, df_veiculos, selecionados):
     
         aproveitamento_vol = min(100, (valor_total / capacidade_max) * 100)
         aproveitamento_peso = min(100, (peso_total / peso_max) * 100)
+        
+        # 🚫 bloqueia veículo absurdamente vazio
+        if aproveitamento_vol < 5:
+            continue
 
         score = calcular_score(
             valor_total,
