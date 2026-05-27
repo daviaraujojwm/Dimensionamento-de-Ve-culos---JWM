@@ -607,9 +607,17 @@ def calcular_score(volume_usado, volume_max, peso_usado, peso_max):
     # penaliza volume baixo
     if aproveitamento_volume < 30:
         score -= (30 - aproveitamento_volume) * 0.8
-
-    # 🔥 penaliza peso alto
+    
+    # penaliza peso alto
     if aproveitamento_peso > 80:
+        score -= 20
+    
+    # 🚫 BLOQUEIA VEÍCULO GRANDE COM PESO RIDICULO
+    if aproveitamento_peso < 15 and volume_max > 20:
+        return 0
+    
+    # 🔥 penaliza veículo grande subutilizado
+    if volume_max > 30 and aproveitamento_volume < 50:
         score -= 20
 
     return max(0, round(score, 2))
@@ -664,12 +672,24 @@ def escolher_veiculo_unico_completo(cargas_unit, df_veiculos):
         if peso_total > peso_max:
             continue
 
+        capacidade_bruta = (
+            veic["largura"]
+            * veic["comprimento"]
+            * veic["altura"]
+        )
+        
+        # 🔥 penaliza veículo grande quando sobra muito espaço
+        if valor_total < capacidade_bruta * 0.4:
+            score_penalidade = 15
+        else:
+            score_penalidade = 0
+        
         score = calcular_score(
             valor_total,
             capacidade,
             peso_total,
             peso_max
-        )
+        ) - score_penalidade
 
         if score > melhor_score:
             melhor_score = score
@@ -1038,12 +1058,16 @@ def gerar_cenarios_multi(cargas, df_veiculos, empilhavel=True, max_opcoes=5):
             if not ("Carreta" in nome or "Bi-Truck" in nome or "Bitruck" in nome):
                 continue
 
-        aproveitamento_peso = peso_total / (cap_peso * qtd)
-        aproveitamento_peso = min(1, aproveitamento_peso)
-
+        aproveitamento_vol = min(1, volume_total / (cap_vol * qtd))
+        
+        aproveitamento_peso = min(1, peso_total / (cap_peso * qtd))
+        
         if aproveitamento_vol < 0.1:
             continue
-
+        
+        if aproveitamento_peso < 0.2 and qtd >= 2:
+            continue
+                
         # 🔥 NOVA INTELIGÊNCIA
         fator_limitante = "VOLUME" if aproveitamento_vol > aproveitamento_peso else "PESO"
 
@@ -1139,13 +1163,16 @@ def gerar_combinacoes(df_testar, valor_total, peso_total, empilhavel):
             f2 = get_fator(v2["Veículo"])
             
             if empilhavel:
+                e1 = get_eficiencia(v1["Veículo"])
+                e2 = get_eficiencia(v2["Veículo"])
+                
                 cap1 = (
                     v1["largura"] * v1["comprimento"] * v1["altura"]
-                ) * f1
-            
+                ) * f1 * e1
+                
                 cap2 = (
                     v2["largura"] * v2["comprimento"] * v2["altura"]
-                ) * f2
+                ) * f2 * e2
             else:
                 cap1 = (v1["largura"] * v1["comprimento"]) * f1
                 cap2 = (v2["largura"] * v2["comprimento"]) * f2
@@ -1475,9 +1502,16 @@ def executar_calculo(cargas, df_veiculos, selecionados):
     df_rank = pd.DataFrame(registros)
     
     # Adicionamos colunas de aproveitamento para o usuário ver o quão longe está
-    df_rank["Aproveitamento (%)"] = df_rank["Volume Máx"].apply(
-        lambda v: (valor_total / v * 100) if v > 0 else 0
-    )
+    def calc_aprov(row):
+        nome = row["Veículo"]
+        fator = get_fator(nome)
+        eficiencia = get_eficiencia(nome)
+    
+        cap = row["Volume Máx"] * fator * eficiencia
+    
+        return (valor_total / cap * 100) if cap > 0 else 0
+    
+    df_rank["Aproveitamento (%)"] = df_rank.apply(calc_aprov, axis=1)
     
     df_rank["Aproveitamento Peso (%)"] = df_rank["Peso Máx"].apply(
         lambda v: (peso_total / v * 100) if v > 0 else 0
