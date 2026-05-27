@@ -231,6 +231,22 @@ def get_fator(nome):
     else:
         return 0.82
 
+
+# ✅ ✅ 👇 COLOCA EXATAMENTE AQUI
+def get_eficiencia(nome):
+    if "Carreta" in nome:
+        return 0.85
+    elif "Bi-Truck" in nome or "Bitruck" in nome:
+        return 0.82
+    elif "Truck" in nome:
+        return 0.78
+    elif "3/4" in nome or "Toco" in nome:
+        return 0.77
+    elif "HR" in nome or "VUC" in nome:
+        return 0.75
+    else:
+        return 0.72
+
 # ============================
 # SESSION STATE
 # ============================
@@ -631,15 +647,21 @@ def escolher_veiculo_unico_completo(cargas_unit, df_veiculos):
         ):
             continue
 
+        fator = get_fator(veic["Veículo"])
+        eficiencia = get_eficiencia(veic["Veículo"])
+        
         capacidade = (
             veic["largura"]
             * veic["comprimento"]
             * veic["altura"]
-        ) * get_fator(veic["Veículo"])
+        ) * eficiencia * fator
 
         peso_max = veic["peso_max"]
 
-        if valor_total > capacidade or peso_total > peso_max:
+        if valor_total > capacidade * 1.10:
+            continue
+        
+        if peso_total > peso_max:
             continue
 
         score = calcular_score(
@@ -1002,7 +1024,7 @@ def gerar_cenarios_multi(cargas, df_veiculos, empilhavel=True, max_opcoes=5):
             )
 
         cap_vol *= eficiencia * fator
-        cap_peso = veic["peso_max"] * eficiencia * fator
+        cap_peso = veic["peso_max"] * fator
 
         qtd_por_volume = math.ceil(volume_total / cap_vol)
         qtd_por_peso = math.ceil(peso_total / cap_peso)
@@ -1011,9 +1033,13 @@ def gerar_cenarios_multi(cargas, df_veiculos, empilhavel=True, max_opcoes=5):
 
         if qtd <= 1 or qtd > 10:
             continue
+        
+        if qtd >= 3:
+            if not ("Carreta" in nome or "Bi-Truck" in nome or "Bitruck" in nome):
+                continue
 
-        aproveitamento_vol = min(1, volume_total / (cap_vol * qtd))
-        aproveitamento_peso = min(1, peso_total / (cap_peso * qtd))
+        aproveitamento_peso = peso_total / (cap_peso * qtd)
+        aproveitamento_peso = min(1, aproveitamento_peso)
 
         if aproveitamento_vol < 0.1:
             continue
@@ -1022,14 +1048,22 @@ def gerar_cenarios_multi(cargas, df_veiculos, empilhavel=True, max_opcoes=5):
         fator_limitante = "VOLUME" if aproveitamento_vol > aproveitamento_peso else "PESO"
 
         # penaliza muitos veículos
-        penalidade_qtd = qtd * 5
+        penalidade_qtd = (qtd - 1) * 15
 
-
+        bonus_grande = 0
+        
+        if "Carreta" in nome:
+            bonus_grande = 15
+        elif "Bi-Truck" in nome or "Bitruck" in nome:
+            bonus_grande = 10
+        elif "Truck" in nome:
+            bonus_grande = 5
+        
         score = (
             (aproveitamento_vol * 50) +
             (aproveitamento_peso * 30) +
             ((1 - abs(aproveitamento_vol - aproveitamento_peso)) * 20)
-        ) - penalidade_qtd
+        ) - penalidade_qtd + bonus_grande
 
         # ✅ CAPACIDADE REAL DO VEÍCULO (SEM FATOR/EFICIÊNCIA)
         cap_vol_bruto = (
@@ -1218,7 +1252,9 @@ def executar_calculo(cargas, df_veiculos, selecionados):
             capacidade_base = veic["largura"] * veic["comprimento"]
         
         fator = get_fator(nome)
-        capacidade_max = capacidade_base * fator
+        eficiencia = get_eficiencia(nome)
+        
+        capacidade_max = capacidade_base * fator * eficiencia
 
         if status == "Viável":
             if peso_total > peso_max:
@@ -1289,19 +1325,20 @@ def executar_calculo(cargas, df_veiculos, selecionados):
         # CAPACIDADE DO VEÍCULO
         # =========================
         fator = get_fator(veic_unico["Veículo"])
+        eficiencia = get_eficiencia(veic_unico["Veículo"])
         
         if empilhavel:
             capacidade = (
                 veic_unico["largura"]
                 * veic_unico["comprimento"]
                 * veic_unico["altura"]
-            ) * fator
+            ) * fator * eficiencia
         else:
             capacidade = (
                 veic_unico["largura"]
                 * veic_unico["comprimento"]
-            ) * fator
-    
+            ) * fator * eficiencia
+
         # =========================
         # APROVEITAMENTO
         # =========================
@@ -1356,7 +1393,9 @@ def executar_calculo(cargas, df_veiculos, selecionados):
         nome = veic["Veículo"]
         fator = get_fator(nome)
 
-        capacidade_max = capacidade_base * fator
+        eficiencia = get_eficiencia(nome)
+        capacidade_max = capacidade_base * fator * eficiencia
+
     
         peso_max = veic["peso_max"]
     
