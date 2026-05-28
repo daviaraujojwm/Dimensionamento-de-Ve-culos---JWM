@@ -415,7 +415,7 @@ def validar_inputs(comp, larg, alt, peso, qtd=None):
     # Comprimento
     if invalido(comp):
         erros.append("Comprimento inválido")
-    elif comp < 0.01:
+    elif comp < 0.05:
         erros.append("Comprimento muito pequeno")
 
     # Largura
@@ -460,6 +460,16 @@ if qtd > 1000:
     st.warning("⚠ Quantidade muito alta pode impactar a performance.")
 
 if qtd > 5000:
+    total_caixas = sum(
+        c["Quantidade"]
+        for c in st.session_state.cargas
+    )
+    
+    if total_caixas > MAX_CAIXAS:
+        st.error(
+            f"❌ Máximo permitido: {MAX_CAIXAS} caixas."
+        )
+        st.stop()
     st.error("❌ Quantidade máxima permitida: 5000")
     st.stop()
 
@@ -581,16 +591,17 @@ if st.session_state.cargas:
     # ❌ LIMPAR CARGA UNITÁRIA
     with col2:
         if len(df_editado) > 0:
-            linha_para_excluir = st.selectbox(
-                "Selecione a carga para excluir:",
-                options=range(len(df_editado)),
-                format_func=lambda i: f"Carga {i+1}"
-            )
-        
-            if st.button("❌ Excluir carga selecionada"):
-                del st.session_state.cargas[linha_para_excluir]
-                st.rerun()
-
+            if not df_editado.empty:
+            
+                linha_para_excluir = st.selectbox(
+                    "Selecione a carga para excluir:",
+                    options=range(len(df_editado)),
+                    format_func=lambda i: f"Carga {i+1}"
+                )
+            
+                if st.button("❌ Excluir carga selecionada"):
+                    del st.session_state.cargas[linha_para_excluir]
+                    st.rerun()
 else:
     st.info("Nenhuma carga adicionada ainda.")
 
@@ -607,6 +618,7 @@ selecionados = st.multiselect(
 # ============================
 # AUXILIARES
 # ============================
+@st.cache_data(show_spinner=False)
 def expand_cargas_unitarias(cargas, limite=MAX_CAIXAS):
     """
     Expande cargas agregadas em unidades individuais.
@@ -633,11 +645,19 @@ def expand_cargas_unitarias(cargas, limite=MAX_CAIXAS):
             if len(lista) >= limite:
                 return lista
 
+            volume = comp * larg * alt
+
+            if volume <= 0:
+                continue
+            
+            densidade = peso / volume if volume > 0 else 0
+            
             lista.append({
                 "comp": comp,
                 "larg": larg,
                 "alt": alt,
                 "peso": peso,
+                "densidade": densidade,
                 "volume": comp * larg * alt
             })
 
@@ -704,49 +724,46 @@ def excede_capacidade(
         return True
 
     return False
-
-def calcular_score(volume_usado, volume_max, peso_usado, peso_max):
+    
+@st.cache_data(show_spinner=False)
+def calcular_score(
+    volume_usado,
+    volume_max,
+    peso_usado,
+    peso_max,
+    centro_massa=0.5,
+    fragmentacao=0.0,
+    estabilidade=1.0
+):
 
     if volume_max <= 0 or peso_max <= 0:
         return 0
 
-    aproveitamento_volume = (
-        volume_usado / volume_max
-    ) * 100
+    vol = min(100, (volume_usado / volume_max) * 100)
 
-    aproveitamento_peso = (
-        peso_usado / peso_max
-    ) * 100
+    peso = min(100, (peso_usado / peso_max) * 100)
 
-    aproveitamento_volume = min(100, aproveitamento_volume)
-    aproveitamento_peso = min(100, aproveitamento_peso)
-
-    equilibrio = (
-        100 - abs(
-            aproveitamento_volume
-            - aproveitamento_peso
-        )
-    )
+    equilibrio = max(0, 100 - abs(vol - peso))
 
     score = (
-        (aproveitamento_volume * 0.45)
-        + (aproveitamento_peso * 0.35)
-        + (equilibrio * 0.20)
+        vol * 0.35
+        + peso * 0.25
+        + equilibrio * 0.20
+        + estabilidade * 15
+        + (1 - fragmentacao) * 5
     )
 
-    # penalizações
-    if aproveitamento_volume < 25:
+    # centro de massa ruim
+    if centro_massa > 0.75:
+        score -= 15
+
+    # muito vazio
+    if vol < 20:
         score -= 25
 
-    if aproveitamento_peso < 10:
-        score -= 20
-
-    if aproveitamento_volume > 95:
+    # excesso
+    if vol > 96:
         score -= 10
-
-    # evita carretas absurdas
-    if volume_max > volume_usado * 4:
-        score -= 15
 
     return round(max(1, score), 2)
 
@@ -1020,6 +1037,15 @@ def cabe_no_piso_heuristica(items, comp_v, larg_v, alt_v):
 
     return True
 
+GRID_SIZE = 1.0
+
+def gerar_chave_grid(x, y, z):
+    return (
+        int(x // GRID_SIZE),
+        int(y // GRID_SIZE),
+        int(z // GRID_SIZE)
+    )
+
 def colide(nova, ocupadas):
     x, y, z, dx, dy, dz = nova
     for ox, oy, oz, odx, ody, odz in ocupadas:
@@ -1045,7 +1071,7 @@ def tem_base(nova, ocupadas, suporte_min=0.7):
     for ox, oy, oz, odx, ody, odz in ocupadas:
 
         # precisa estar exatamente sobre
-        if round(oz + odz, 4) != round(z, 4):
+        if abs((oz + odz) - z) > 0.001:
             continue
 
         overlap_x = max(
@@ -1064,6 +1090,42 @@ def tem_base(nova, ocupadas, suporte_min=0.7):
             return True
 
     return False
+
+def validar_pressao(nova, ocupadas, limite=850):
+
+    x, y, z, dx, dy, dz, peso = nova
+
+    if z == 0:
+        return True
+
+    for oc in ocupadas:
+
+        ox, oy, oz, odx, ody, odz, opeso = oc
+
+        if round(oz + odz, 4) != round(z, 4):
+            continue
+
+        overlap_x = max(
+            0,
+            min(x + dx, ox + odx) - max(x, ox)
+        )
+
+        overlap_y = max(
+            0,
+            min(y + dy, oy + ody) - max(y, oy)
+        )
+
+        area = overlap_x * overlap_y
+
+        if area <= 0:
+            continue
+
+        pressao = peso / area
+
+        if pressao > limite:
+            return False
+
+    return True
 
 def calcular_centro_massa(posicoes):
     if not posicoes:
@@ -1097,8 +1159,9 @@ def simular_empilhamento_3d(
     larg_veic = veiculo["largura"]
     alt_veic = veiculo["altura"]
     peso_max = veiculo["peso_max"]
-
+    
     posicoes_ocupadas = []
+    grid_ocupacao = {}
     caixas_alocadas = 0
     peso_acumulado = 0
 
@@ -1107,13 +1170,22 @@ def simular_empilhamento_3d(
 
     cargas_unitarias = sorted(
         cargas_unitarias,
-        key=lambda x: x["comp"] * x["larg"] * x["alt"],
-        reverse=True
+        key=lambda x: (
+            -x["densidade"],
+            -(x["comp"] * x["larg"]),
+            -x["volume"]
+        )
     )
 
     qtd_total_real = len(cargas_unitarias)
 
+    free_spaces = [
+    (0, 0, 0, comp_veic, larg_veic, alt_veic)
+    ]
+    
     for item in cargas_unitarias:
+
+    contador += 1
 
         # evita simular caixas impossíveis
         if (
@@ -1165,6 +1237,8 @@ def simular_empilhamento_3d(
                 round(item["comp"], 4)
             )
         ]))
+        
+        orientacoes = orientacoes[:MAX_ORIENTACOES]
         for comp_o, larg_o, alt_o in orientacoes:
 
             try:
@@ -1206,55 +1280,111 @@ def simular_empilhamento_3d(
                 estourou_limite = True
                 break
             
-            for z in alturas_camadas:
+            colocado = False
             
-                if caixas_alocadas >= qtd_total_real:
-                    break
-            
-                for x in range(0, min(x_max, 35), step):
-            
-                    if caixas_alocadas >= qtd_total_real:
-                        break
-            
-                    for y in range(0, min(y_max, 20), step):
-            
-                        if caixas_alocadas >= qtd_total_real:
-                            break
-
-                        contador += 1
-                        if contador > limite_iter:
-                            estourou_limite = True
-                            break
-
-                        nova = (
-                            x * comp_o,
-                            y * larg_o,
-                            z, 
+            for idx, espaco in enumerate(free_spaces):
+        
+                sx, sy, sz, scomp, slarg, salt = espaco
+        
+                # cabe no espaço?
+                if (
+                    comp_o <= scomp and
+                    larg_o <= slarg and
+                    alt_o <= salt
+                ):
+        
+                    nova = (
+                        sx,
+                        sy,
+                        sz,
+                        comp_o,
+                        larg_o,
+                        alt_o
+                    )
+        
+                    if colide(nova, posicoes_ocupadas):
+                        continue
+        
+                    if not tem_base(nova, posicoes_ocupadas):
+                        continue
+                    if not validar_pressao(
+                        (
+                            sx,
+                            sy,
+                            sz,
                             comp_o,
                             larg_o,
-                            alt_o
-                        )
-                        if len(posicoes_ocupadas) > MAX_CAIXAS_3D:
-                            estourou_limite = True
-                            break
+                            alt_o,
+                            item["peso"]
+                        ),
+                        posicoes_ocupadas
+                    ):
+                        continue
+        
+                    posicoes_ocupadas.append(nova)
 
-                        if colide(nova, posicoes_ocupadas):
-                            continue
-                        if not tem_base(nova, posicoes_ocupadas):
-                            continue
-                        if peso_acumulado + item["peso"] > peso_max:
-                            continue
+                    chave = gerar_chave_grid(sx, sy, sz)
 
-                        posicoes_ocupadas.append(nova)
-                        caixas_alocadas += 1
-                        peso_acumulado += item["peso"]
-                        
-                        if caixas_alocadas >= qtd_total_real:
-                            break
-                    if estourou_limite:
-                        break
-                if estourou_limite:
+                    if chave not in grid_ocupacao:
+                        grid_ocupacao[chave] = []
+                    
+                    grid_ocupacao[chave].append(nova)
+        
+                    caixas_alocadas += 1
+                    peso_acumulado += item["peso"]
+        
+                    colocado = True
+        
+                    # remove espaço usado
+                    free_spaces.pop(idx)
+        
+                    # espaço lateral
+                    free_spaces.append((
+                        sx + comp_o,
+                        sy,
+                        sz,
+                        scomp - comp_o,
+                        slarg,
+                        salt
+                    ))
+        
+                    # espaço frontal
+                    free_spaces.append((
+                        sx,
+                        sy + larg_o,
+                        sz,
+                        comp_o,
+                        slarg - larg_o,
+                        salt
+                    ))
+        
+                    # espaço superior
+                    free_spaces.append((
+                        sx,
+                        sy,
+                        sz + alt_o,
+                        comp_o,
+                        larg_o,
+                        max(0, salt - alt_o)
+                    ))
+                    free_spaces = [
+                        s for s in free_spaces
+                        if s[3] > 0 and s[4] > 0 and s[5] > 0
+                    ]
+                    
+                    # evita explosão
+                    if len(free_spaces) > 1500:
+                    
+                        free_spaces = sorted(
+                            free_spaces,
+                            key=lambda s: s[3] * s[4] * s[5],
+                            reverse=True
+                        )[:1500]
+        
                     break
+        
+            if colocado:
+                break
 
     volume_usado = sum(c * l * a for (_, _, _, c, l, a) in posicoes_ocupadas)
     centro = calcular_centro_massa(posicoes_ocupadas)
@@ -1486,6 +1616,7 @@ def gerar_combinacoes(df_testar, valor_total, peso_total, empilhavel):
 
     return pd.DataFrame(combos)
 
+@st.cache_data(show_spinner=False, ttl=300)            
 def executar_calculo(cargas, df_veiculos, selecionados):
     """
     Função central do sistema.
@@ -1892,7 +2023,7 @@ if st.button("🚀 Calcular Dimensionamento", disabled=not st.session_state.carg
         st.session_state.cenario = meta.get("cenario")
 
     # feedback básico
-    if st.session_state.cenario == "RANKING":
+    if st.session_state.get("cenario") == "RANKING":
         st.success("✅ Melhor veículo identificado com base em eficiência.")
     elif st.session_state.cenario == "MULTI":
         st.warning("⚠ Planejamento com múltiplos veículos necessário.")
@@ -1985,9 +2116,9 @@ if st.button("🔍 Simular Empilhamento 3D"):
         # 🔥 cria veículo combinado
         veic = {
             "largura": df_parte["largura"].max(),
-            "comprimento": df_parte["comprimento"].sum(),
+            "comprimento": df_parte["comprimento"].max(),
             "altura": df_parte["altura"].max(),
-            "peso_max": df_parte["peso_max"].sum()
+            "peso_max": df_parte["peso_max"].max()
         }
     
     # ✅ VEÍCULO NORMAL
@@ -2109,7 +2240,7 @@ if st.button("🔍 Simular Empilhamento 3D"):
     
             alphahull=0,
     
-            opacity=0.75,
+            opacity=0.45,
     
             color=cores[i % len(cores)],
     
@@ -2153,7 +2284,13 @@ if st.button("🔍 Simular Empilhamento 3D"):
         height=700
     )
 
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(
+        fig,
+        use_container_width=True,
+        config={
+            "responsive": True
+        }
+    )
 
 # ============================
 # 📥 DOWNLOAD EXCEL
