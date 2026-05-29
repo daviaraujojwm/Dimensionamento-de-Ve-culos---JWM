@@ -1184,7 +1184,7 @@ def simular_empilhamento_3d(
     ]
     
     for item in cargas_unitarias:
-    contador += 1
+        contador += 1
 
         # evita simular caixas impossíveis
         if (
