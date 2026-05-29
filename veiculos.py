@@ -179,27 +179,49 @@ Use vírgula ou ponto para decimais.
 # BASE DE VEÍCULOS
 # ============================
 lista_veiculos = [
-    {"nome": "Fiorino", "largura": 1.000, "comprimento": 1.200, "altura": 1.000, "peso_max": 500},
-    {"nome": "Van Utilitário", "largura": 1.000, "comprimento": 1.600, "altura": 1.000, "peso_max": 500},
-    {"nome": "HR Baú", "largura": 1.700, "comprimento": 3.000, "altura": 1.900, "peso_max": 1300},
-    {"nome": "HR Aberto", "largura": 1.800, "comprimento": 3.000, "altura": 2.000, "peso_max": 1300},
-    {"nome": "Veículo 3/4 Aberto", "largura": 2.100, "comprimento": 5.000, "altura": 2.300, "peso_max": 3000},
-    {"nome": "Veículo 3/4 Baú", "largura": 2.100, "comprimento": 5.000, "altura": 2.300, "peso_max": 3000},
-    {"nome": "Toco Aberto", "largura": 2.200, "comprimento": 6.000, "altura": 2.700, "peso_max": 6000},
-    {"nome": "Toco Baú", "largura": 2.200, "comprimento": 6.000, "altura": 2.700, "peso_max": 6000},
-    {"nome": "VUC Baú", "largura": 1.800, "comprimento": 3.100, "altura": 2.000, "peso_max": 2500},
-    {"nome": "Truck Aberto", "largura": 2.400, "comprimento": 8.000, "altura": 2.800, "peso_max": 12000},
-    {"nome": "Truck Baú", "largura": 2.400, "comprimento": 8.000, "altura": 2.800, "peso_max": 12000},
-    {"nome": "Bi-Truck Aberto", "largura": 2.400, "comprimento": 10.000, "altura": 2.800, "peso_max": 17000},
-    {"nome": "Bi-Truck Baú", "largura": 2.400, "comprimento": 10.000, "altura": 2.800, "peso_max": 17000},
-    {"nome": "Carreta Sider", "largura": 2.400, "comprimento": 12.000, "altura": 2.700, "peso_max": 24000},
-    {"nome": "Carreta Wanderleia", "largura": 2.400, "comprimento": 12.000, "altura": 2.700, "peso_max": 27000},
-    {"nome": "Carreta Wanderleia Aberta", "largura": 2.600, "comprimento": 18.150, "altura": 2.900, "peso_max": 46000},
-    {"nome": "Carreta Wanderleia Sider", "largura": 2.600, "comprimento": 15.200, "altura": 2.800, "peso_max": 41500},
-    {"nome": "Carreta Rodo Trem", "largura": 2.400, "comprimento": 12.000, "altura": 2.700, "peso_max": 74000},
-    {"nome": "Bitruck Sider", "largura": 2.400, "comprimento": 10.000, "altura": 2.700, "peso_max": 18000},
-    {"nome": "Carreta Grade Baixa", "largura": 2.400, "comprimento": 12.400, "altura": 2.700, "peso_max": 24000},
-    {"nome": "Wanderleia Carga Seca", "largura": 2.400, "comprimento": 14.400, "altura": 2.700, "peso_max": 27000}
+
+    {"nome": "Fiorino", "largura": 1.000, "comprimento": 1.200, "altura": 1.000, "peso_max": 500, "custo": 1},
+
+    {"nome": "Van Utilitário", "largura": 1.000, "comprimento": 1.600, "altura": 1.000, "peso_max": 500, "custo": 2},
+
+    {"nome": "HR Baú", "largura": 1.700, "comprimento": 3.000, "altura": 1.900, "peso_max": 1300, "custo": 3},
+
+    {"nome": "HR Aberto", "largura": 1.800, "comprimento": 3.000, "altura": 2.000, "peso_max": 1300, "custo": 3},
+
+    {"nome": "VUC Baú", "largura": 1.800, "comprimento": 3.100, "altura": 2.000, "peso_max": 2500, "custo": 4},
+
+    {"nome": "Veículo 3/4 Aberto", "largura": 2.100, "comprimento": 5.000, "altura": 2.300, "peso_max": 3000, "custo": 5},
+
+    {"nome": "Veículo 3/4 Baú", "largura": 2.100, "comprimento": 5.000, "altura": 2.300, "peso_max": 3000, "custo": 5},
+
+    {"nome": "Toco Aberto", "largura": 2.200, "comprimento": 6.000, "altura": 2.700, "peso_max": 6000, "custo": 6},
+
+    {"nome": "Toco Baú", "largura": 2.200, "comprimento": 6.000, "altura": 2.700, "peso_max": 6000, "custo": 6},
+
+    {"nome": "Truck Aberto", "largura": 2.400, "comprimento": 8.000, "altura": 2.800, "peso_max": 12000, "custo": 7},
+
+    {"nome": "Truck Baú", "largura": 2.400, "comprimento": 8.000, "altura": 2.800, "peso_max": 12000, "custo": 7},
+
+    {"nome": "Bitruck Sider", "largura": 2.400, "comprimento": 10.000, "altura": 2.700, "peso_max": 18000, "custo": 8},
+
+    {"nome": "Bi-Truck Aberto", "largura": 2.400, "comprimento": 10.000, "altura": 2.800, "peso_max": 17000, "custo": 8},
+
+    {"nome": "Bi-Truck Baú", "largura": 2.400, "comprimento": 10.000, "altura": 2.800, "peso_max": 17000, "custo": 8},
+
+    {"nome": "Carreta Sider", "largura": 2.400, "comprimento": 12.000, "altura": 2.700, "peso_max": 24000, "custo": 10},
+
+    {"nome": "Carreta Grade Baixa", "largura": 2.400, "comprimento": 12.400, "altura": 2.700, "peso_max": 24000, "custo": 10},
+
+    {"nome": "Carreta Wanderleia", "largura": 2.400, "comprimento": 12.000, "altura": 2.700, "peso_max": 27000, "custo": 10},
+
+    {"nome": "Wanderleia Carga Seca", "largura": 2.400, "comprimento": 14.400, "altura": 2.700, "peso_max": 27000, "custo": 10},
+
+    {"nome": "Carreta Wanderleia Sider", "largura": 2.600, "comprimento": 15.200, "altura": 2.800, "peso_max": 41500, "custo": 11},
+
+    {"nome": "Carreta Wanderleia Aberta", "largura": 2.600, "comprimento": 18.150, "altura": 2.900, "peso_max": 46000, "custo": 11},
+
+    {"nome": "Carreta Rodo Trem", "largura": 2.400, "comprimento": 12.000, "altura": 2.700, "peso_max": 74000, "custo": 12}
+
 ]
 
 # ============================
@@ -269,20 +291,32 @@ def get_eficiencia(nome):
 
 def categoria_veiculo(nome):
 
-    if "Carreta" in nome:
-        return "CARRETA"
+    if "Fiorino" in nome:
+        return "FIORINO"
 
-    elif "Truck" in nome:
-        return "TRUCK"
-
-    elif "Toco" in nome:
-        return "TOCO"
+    elif "Van" in nome:
+        return "VAN"
 
     elif "HR" in nome:
         return "HR"
 
     elif "VUC" in nome:
         return "VUC"
+
+    elif "3/4" in nome:
+        return "TRES_QUARTOS"
+
+    elif "Toco" in nome:
+        return "TOCO"
+
+    elif "Bi-Truck" in nome or "Bitruck" in nome:
+        return "BITRUCK"
+
+    elif "Truck" in nome:
+        return "TRUCK"
+
+    elif "Carreta" in nome or "Wanderleia" in nome:
+        return "CARRETA"
 
     else:
         return "OUTRO"
@@ -461,18 +495,16 @@ if erros and (comp_txt or larg_txt or alt_txt or peso_txt):
 if qtd > 1000:
     st.warning("⚠ Quantidade muito alta pode impactar a performance.")
 
+total_caixas = sum(
+    int(c["Quantidade"])
+    for c in st.session_state.cargas
+) + int(qtd)
+
+if total_caixas > MAX_CAIXAS:
+    st.warning(f"⚠ Máximo recomendado para cálculo assertivo: {MAX_CAIXAS} caixas.")
+
 if qtd > 5000:
-    total_caixas = sum(
-        c["Quantidade"]
-        for c in st.session_state.cargas
-    )
-    
-    if total_caixas > MAX_CAIXAS:
-        st.error(
-            f"❌ Máximo permitido: {MAX_CAIXAS} caixas."
-        )
-        st.stop()
-    st.error("❌ Quantidade máxima permitida: 5000")
+    st.error("❌ Quantidade máxima por item: 5000")
     st.stop()
 
 pode_adicionar = len(erros) == 0
@@ -739,8 +771,8 @@ def calcular_score(volume_total, capacidade, peso_total, peso_max):
     equilibrio = max(0, 1 - abs(ocupacao_volume - ocupacao_peso))
 
     score = (
-        ocupacao_volume * 60
-        + ocupacao_peso * 35
+        ocupacao_volume * 55
+        + ocupacao_peso * 30
         + equilibrio * 15
     )
 
@@ -749,11 +781,11 @@ def calcular_score(volume_total, capacidade, peso_total, peso_max):
     elif ocupacao_volume < 0.30:
         score -= 18
 
-    if ocupacao_volume > 0.97:
-        score -= 15
+    if ocupacao_volume > 0.95:
+        score -= 20
 
     if ocupacao_peso > 0.95:
-        score -= 15
+        score -= 20
 
     return round(max(1, min(100, score)), 2)
 
@@ -783,11 +815,19 @@ def escolher_veiculo_unico_completo(cargas_unit, df_veiculos):
     for _, veic in df_ordenado.iterrows():
 
         # ✅ BLOQUEIO FÍSICO
-        if (
-            max_comp > veic["comprimento"]
-            or max_larg > veic["largura"]
-            or max_alt > veic["altura"]
-        ):
+        dim_carga = sorted([
+            max_comp,
+            max_larg,
+            max_alt
+        ])
+        
+        dim_veiculo = sorted([
+            veic["comprimento"],
+            veic["largura"],
+            veic["altura"]
+        ])
+        
+        if any(c > v for c, v in zip(dim_carga, dim_veiculo)):
             continue
 
         fator = get_fator(veic["Veículo"])
@@ -879,116 +919,81 @@ def escolher_veiculo_unico_completo(cargas_unit, df_veiculos):
                 veic["altura"]
             ):
                 continue
-        
         # =========================================
-        # VALIDAÇÃO FÍSICA REAL (3D)
+        # VALIDAÇÃO FÍSICA
         # =========================================
         
-        cargas_reduzidas = reduzir_cargas_para_simulacao(
-            [
-                {
-                    "Comprimento (m)": c["comp"],
-                    "Largura (m)": c["larg"],
-                    "Altura (m)": c["alt"],
-                    "Peso unitário (kg)": c["peso"],
-                    "Quantidade": 1
-                }
-                for c in cargas_unit
-            ],
-            MAX_CAIXAS_3D
-        )
+        if empilhavel:
         
-        posicoes, caixas_alocadas, volume_usado_3d, peso_usado_3d = simular_empilhamento_3d(
-            cargas_reduzidas,
-            veic,
-            len(cargas_reduzidas)
-        )
+            cargas_reduzidas = reduzir_cargas_para_simulacao(
+                [
+                    {
+                        "Comprimento (m)": c["comp"],
+                        "Largura (m)": c["larg"],
+                        "Altura (m)": c["alt"],
+                        "Peso unitário (kg)": c["peso"],
+                        "Quantidade": 1
+                    }
+                    for c in cargas_unit
+                ],
+                MAX_CAIXAS_3D
+            )
         
-        # 🚫 NÃO coube fisicamente
-        if caixas_alocadas < len(cargas_reduzidas):
-            continue
+            posicoes, caixas_alocadas, volume_usado_3d, peso_usado_3d = simular_empilhamento_3d(
+                cargas_reduzidas,
+                veic,
+                len(cargas_reduzidas)
+            )
+        
+            if caixas_alocadas < len(cargas_reduzidas):
+                continue
+        
+        else:
+        
+            caixas_alocadas = len(cargas_unit)
         
         score = calcular_score(
             valor_total,
             capacidade,
             peso_total,
             peso_max
-        )
+        ) - score_penalidade
         
-        # penaliza veículo exageradamente grande
-        if aproveitamento_volume < 20:
-            score -= 25
-        
-        elif aproveitamento_volume < 35:
-            score -= 10
-        
-        # bônus compacto
-        score += (100 / capacidade)
-
-        # =========================================
-        # PENALIDADE INTELIGENTE DE TAMANHO
-        # =========================================
-        
-        ocupacao_percentual = (
-            valor_total / capacidade_bruta
-            if capacidade_bruta > 0 else 0
-        )
-        
-        penalidade_tamanho = (
-            (1 - ocupacao_percentual) ** 2
-        ) * 55
-        
-        score -= penalidade_tamanho
-
-        # =========================================
-        # PENALIDADE DE EXCESSO
-        # =========================================
-        if aproveitamento_volume > 97:
-        
-            score -= 40
-        
-        elif aproveitamento_volume > 92:
-        
-            score -= 25
-        
-        # =========================================
-        # CUSTO OPERACIONAL
-        # =========================================
-        
+        ocupacao_real = valor_total / capacidade_bruta if capacidade_bruta > 0 else 0
         custo_operacional = veic.get("custo", 5)
         
-        score -= custo_operacional * 2
+        # Penaliza veículo grande demais
+        if ocupacao_real < 0.10:
+            score -= 60
         
-        # =========================================
-        # PENALIDADE OCIOSIDADE
-        # =========================================
+        elif ocupacao_real < 0.20:
+            score -= 40
         
-        score -= score_penalidade
-        # bônus para veículo compacto ideal
-        if 0.55 <= ocupacao_real <= 0.88:
-            score += 8
+        elif ocupacao_real < 0.35:
+            score -= 20
+            bonus_compacto = (
+                100 / capacidade_bruta
+            )
+            
+            score += bonus_compacto
+        # Penaliza trabalhar no limite
+        if aproveitamento_volume > 95:
+            score -= 25
+        elif aproveitamento_volume > 90:
+            score -= 12
         
-        # bônus premium
-        if 0.70 <= ocupacao_real <= 0.90:
-            score += 5
+        # Penaliza custo
+        score -= custo_operacional * 1.8
         
-        # =========================================
-        # BÔNUS COMPACTO
-        # =========================================
+        # Bônus para ocupação ideal
+        if 0.55 <= ocupacao_real <= 0.85:
+            score += 12
+        elif 0.45 <= ocupacao_real <= 0.90:
+            score += 6
         
-        bonus_compacto = (
-            80 / capacidade_bruta
-        )
-        
-        score += bonus_compacto
-        
-        # =========================================
-        # BÔNUS VALIDAÇÃO 3D
-        # =========================================
-        
+        # Bônus por validação 3D
         score += 10
         
-        # limite final
         score = max(1, min(100, score))
 
         if score > melhor_score:
@@ -1146,14 +1151,23 @@ def cabe_no_piso_heuristica(items, comp_v, larg_v, alt_v):
             if colocado:
                 break
 
-            # Cria nova camada (empilhamento)
-            if altura_usada + it["alt"] <= alt_v:
-                camadas.append({"len": comp_i})
-                altura_usada += it["alt"]
-                colocado = True
-                break
-
         # Não foi possível colocar a caixa
+        if not colocado:
+
+            # cria nova camada no comprimento
+            comprimento_usado = sum(
+                camada["len"]
+                for camada in camadas
+            )
+
+            if comprimento_usado + comp_i <= comp_v:
+
+                camadas.append({
+                    "len": comp_i
+                })
+
+                colocado = True
+
         if not colocado:
             return False
 
@@ -1212,42 +1226,6 @@ def tem_base(nova, ocupadas, suporte_min=0.7):
             return True
 
     return False
-
-def validar_pressao(nova, ocupadas, limite=850):
-
-    x, y, z, dx, dy, dz, peso = nova
-
-    if z == 0:
-        return True
-
-    for oc in ocupadas:
-
-        ox, oy, oz, odx, ody, odz, opeso = oc
-
-        if round(oz + odz, 4) != round(z, 4):
-            continue
-
-        overlap_x = max(
-            0,
-            min(x + dx, ox + odx) - max(x, ox)
-        )
-
-        overlap_y = max(
-            0,
-            min(y + dy, oy + ody) - max(y, oy)
-        )
-
-        area = overlap_x * overlap_y
-
-        if area <= 0:
-            continue
-
-        pressao = peso / area
-
-        if pressao > limite:
-            return False
-
-    return True
 
 def calcular_centro_massa(posicoes):
     if not posicoes:
@@ -1425,10 +1403,15 @@ def simular_empilhamento_3d(
         
                     if colide(nova, posicoes_ocupadas):
                         continue
-        
+                    
                     if not tem_base(nova, posicoes_ocupadas):
                         continue
-        
+                    
+                    # valida peso máximo do veículo
+                    
+                    if peso_acumulado + item["peso"] > peso_max:
+                        continue
+                    
                     posicoes_ocupadas.append(nova)
 
                     chave = gerar_chave_grid(sx, sy, sz)
@@ -1675,18 +1658,18 @@ def gerar_combinacoes(df_testar, valor_total, peso_total, empilhavel):
             categoria_1 = categoria_veiculo(v1["Veículo"])
             categoria_2 = categoria_veiculo(v2["Veículo"])
             
-            # evita misturas absurdas
-            misturas_proibidas = [
-                ("Fiorino", "Carreta"),
-                ("Van", "Carreta")
+            # evita misturas muito diferentes
+            combos_permitidos = [
+                ("HR", "VUC"),
+                ("VUC", "TRUCK"),
+                ("TRUCK", "BITRUCK"),
+                ("TRUCK", "CARRETA"),
+                ("BITRUCK", "CARRETA")
             ]
             
-            if (
-                (categoria_1, categoria_2) in misturas_proibidas
-                or
-                (categoria_2, categoria_1) in misturas_proibidas
-            ):
-                continue
+            if categoria_1 != categoria_2:
+                if (categoria_1, categoria_2) not in combos_permitidos and (categoria_2, categoria_1) not in combos_permitidos:
+                    continue
                 
             if chave in usados:
                 continue
@@ -1748,7 +1731,7 @@ def gerar_combinacoes(df_testar, valor_total, peso_total, empilhavel):
 
     return pd.DataFrame(combos)
 
-def executar_calculo(cargas, df_veiculos, selecionados):
+def executar_calculo(cargas, df_veiculos, selecionados, empilhavel):
     """
     Função central do sistema.
     Responsável por:
@@ -1925,10 +1908,21 @@ def executar_calculo(cargas, df_veiculos, selecionados):
     
     for _, veic in df_testar.iterrows():
         # ✅ 🔥 BLOQUEIO FÍSICO REAL
-        if (
-            max_comp > veic["comprimento"]
-            or max_larg > veic["largura"]
-            or max_alt > veic["altura"]
+        dim_carga = sorted([
+            max_comp,
+            max_larg,
+            max_alt
+        ])
+        
+        dim_veiculo = sorted([
+            veic["comprimento"],
+            veic["largura"],
+            veic["altura"]
+        ])
+        
+        if any(
+            c > v
+            for c, v in zip(dim_carga, dim_veiculo)
         ):
             continue
 
@@ -2141,7 +2135,8 @@ if st.button("🚀 Calcular Dimensionamento", disabled=not st.session_state.carg
         df_result, meta = executar_calculo(
             st.session_state.cargas,
             df_veiculos,
-            selecionados
+            selecionados,
+            empilhavel
         )
 
         # salva no session_state
