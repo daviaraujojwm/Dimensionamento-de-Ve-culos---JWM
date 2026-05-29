@@ -533,11 +533,6 @@ if st.button("➕ Adicionar carga", disabled=not pode_adicionar):
         "Peso total (kg)": peso * qtd
     })
 
-    for k in ["comp", "larg", "alt", "peso"]:
-        st.session_state[k] = ""
-    
-    st.session_state["qtd"] = 1
-    
     st.rerun()
     
 # ============================
