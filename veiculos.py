@@ -739,6 +739,30 @@ def calcular_totais(cargas, empilhavel=True):
     else:
         return area, peso
 
+def calcular_totais_reais(cargas, empilhavel=True):
+
+    volume = 0
+    area = 0
+    peso = 0
+
+    for c in cargas:
+
+        qtd = int(c["Quantidade"])
+
+        comp = float(c["Comprimento (m)"])
+        larg = float(c["Largura (m)"])
+        alt = float(c["Altura (m)"])
+        peso_unit = float(c["Peso unitário (kg)"])
+
+        volume += comp * larg * alt * qtd
+        area += comp * larg * qtd
+        peso += peso_unit * qtd
+
+    if empilhavel:
+        return volume, peso
+    else:
+        return area, peso
+
 def excede_capacidade(
     peso_atual,
     volume_atual,
@@ -789,17 +813,15 @@ def calcular_score(volume_total, capacidade, peso_total, peso_max):
 
     return round(max(1, min(100, score)), 2)
 
-def escolher_veiculo_unico_completo(cargas_unit, df_veiculos):
+def escolher_veiculo_unico_completo(cargas_unit, df_veiculos, cargas, empilhavel):
 
     if not cargas_unit:
         return None
 
-    if empilhavel:
-        valor_total = sum(c["volume"] for c in cargas_unit)
-    else:
-        valor_total = sum(c["comp"] * c["larg"] for c in cargas_unit)
-
-    peso_total = sum(c["peso"] for c in cargas_unit)
+    valor_total, peso_total = calcular_totais_reais(
+        cargas,
+        empilhavel
+    )
 
     melhor_score = -1
     melhor_veiculo = None
@@ -842,9 +864,6 @@ def escolher_veiculo_unico_completo(cargas_unit, df_veiculos):
         
         if peso_total > peso_max:
             continue
-        aproveitamento_peso = (
-            peso_total / peso_max
-        ) * 100
 
         aproveitamento_peso = (
         (peso_total / peso_max) * 100
@@ -962,20 +981,16 @@ def escolher_veiculo_unico_completo(cargas_unit, df_veiculos):
         ocupacao_real = valor_total / capacidade_bruta if capacidade_bruta > 0 else 0
         custo_operacional = veic.get("custo", 5)
         
-        # Penaliza veículo grande demais
-        if ocupacao_real < 0.10:
-            score -= 60
+        # =========================================
+        # BÔNUS COMPACTO
+        # =========================================
         
-        elif ocupacao_real < 0.20:
-            score -= 40
+        bonus_compacto = (
+            100 / capacidade_bruta
+        )
         
-        elif ocupacao_real < 0.35:
-            score -= 20
-            bonus_compacto = (
-                100 / capacidade_bruta
-            )
-            
-            score += bonus_compacto
+        score += bonus_compacto
+        
         # Penaliza trabalhar no limite
         if aproveitamento_volume > 95:
             score -= 25
@@ -1153,19 +1168,20 @@ def cabe_no_piso_heuristica(items, comp_v, larg_v, alt_v):
 
         # Não foi possível colocar a caixa
         if not colocado:
-
-            # cria nova camada no comprimento
+        
+            comp_novo = min(it["comp"], it["larg"])
+        
             comprimento_usado = sum(
                 camada["len"]
                 for camada in camadas
             )
-
-            if comprimento_usado + comp_i <= comp_v:
-
+        
+            if comprimento_usado + comp_novo <= comp_v:
+        
                 camadas.append({
-                    "len": comp_i
+                    "len": comp_novo
                 })
-
+        
                 colocado = True
 
         if not colocado:
@@ -1488,16 +1504,10 @@ def simular_empilhamento_3d(
 
 def gerar_cenarios_multi(cargas, df_veiculos, empilhavel=True, max_opcoes=5):
 
-    cargas_unit = expand_cargas_unitarias(
-    cargas,
-    limite=MAX_CAIXAS
-)
-    if empilhavel:
-        volume_total = sum(c["volume"] for c in cargas_unit)
-    else:
-        volume_total = sum(c["comp"] * c["larg"] for c in cargas_unit)
-
-    peso_total = sum(c["peso"] for c in cargas_unit)
+    volume_total, peso_total = calcular_totais_reais(
+        cargas,
+        empilhavel
+    )
 
     cenarios = []
 
@@ -1755,7 +1765,10 @@ def executar_calculo(cargas, df_veiculos, selecionados, empilhavel):
     # --------------------------------
     # Totais da carga
     # --------------------------------
-    valor_total, peso_total = calcular_totais(cargas, empilhavel)
+    valor_total, peso_total = calcular_totais_reais(
+        cargas,
+        empilhavel
+    )
     
     # --------------------------------
     # Viabilidade básica (peso + volume)
@@ -1773,19 +1786,29 @@ def executar_calculo(cargas, df_veiculos, selecionados, empilhavel):
     
         status = "Viável"
         motivo = ""
-    
-        # 🚫 REGRAS FÍSICAS (Agora apenas marcam como 'Limitado' em vez de remover totalmente do cálculo inicial)
-        if max_larg > veic["largura"]:
-            status = "Inviável"
-            motivo = "Largura excede"
         
-        elif max_comp > veic["comprimento"]:
-            status = "Inviável"
-            motivo = "Comprimento excede"
+        # =====================================
+        # VALIDAÇÃO COM ROTAÇÃO
+        # =====================================
         
-        elif max_alt > veic["altura"]:
+        dim_carga = sorted([
+            max_comp,
+            max_larg,
+            max_alt
+        ])
+        
+        dim_veiculo = sorted([
+            veic["comprimento"],
+            veic["largura"],
+            veic["altura"]
+        ])
+        
+        if any(
+            c > v
+            for c, v in zip(dim_carga, dim_veiculo)
+        ):
             status = "Inviável"
-            motivo = "Altura excede"
+            motivo = "Dimensão excede"
     
         # 🚫 REGRAS OPERACIONAIS (PESO / CAPACIDADE)
         
@@ -1851,11 +1874,22 @@ def executar_calculo(cargas, df_veiculos, selecionados, empilhavel):
     # ✅ 2. VERIFICA VEÍCULO ÚNICO REAL
     # ==========================================
     
-    cargas_unit = expand_cargas_unitarias(cargas)
+    cargas_unit = expand_cargas_unitarias(
+        cargas,
+        limite=MAX_CAIXAS
+    )
+    
+    # totais reais da carga
+    valor_total_real, peso_total_real = calcular_totais_reais(
+        cargas,
+        empilhavel
+    )
     
     veic_unico = escolher_veiculo_unico_completo(
         cargas_unit,
-        df_testar
+        df_testar,
+        cargas,
+        empilhavel
     )
         
     # ==================================================
