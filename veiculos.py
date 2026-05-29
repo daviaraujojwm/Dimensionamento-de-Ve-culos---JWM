@@ -27,8 +27,7 @@ st.markdown("""
     background-image: url("https://raw.githubusercontent.com/daviaraujojwm/Dimensionamento-de-Ve-culos---JWM/main/tela%20de%20fundo.png");
     background-size: cover;
     background-position: center;
-    background-attachment: fixed;
-    overflow-x: hidden;
+    background-attachment: scroll;
 }
 
 /* ✅ overlay mais leve e estável */
@@ -54,15 +53,15 @@ st.markdown("""
 
     padding: 20px 25px;
 
-    background: rgba(15,15,15,0.55);
-    backdrop-filter: blur(10px);
+    background: rgba(255, 255, 255, 0.085);
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
 
     border-radius: 18px;
     border: 1px solid rgba(255,255,255,0.2);
     box-shadow: 0 6px 30px rgba(0,0,0,0.22);
 
-    overflow-x: hidden;
-    overflow-y: auto;
+    overflow: visible;
 }
 
 .main .block-container {
@@ -158,6 +157,9 @@ if "df_result" not in st.session_state or not isinstance(st.session_state.df_res
         "Score"
     ])
     
+if "veiculo_simulado" not in st.session_state:
+    st.session_state.veiculo_simulado = None
+
 # ============================
 # SIDEBAR
 # ============================
