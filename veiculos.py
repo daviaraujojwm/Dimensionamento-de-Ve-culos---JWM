@@ -1446,8 +1446,6 @@ def executar_calculo(cargas, df_veiculos, selecionados, empilhavel):
                 break
         
         if carga_incompativel:
-            continue
-            
             status = "Inviável"
             motivo = "Dimensão excede"
     
@@ -1507,23 +1505,35 @@ def executar_calculo(cargas, df_veiculos, selecionados, empilhavel):
     ranking = []
     
     for _, veic in df_testar.iterrows():
-        # ✅ 🔥 BLOQUEIO FÍSICO REAL
-        dim_carga = sorted([
-            max_comp,
-            max_larg,
-            max_alt
-        ])
         
-        dim_veiculo = sorted([
-            veic["comprimento"],
-            veic["largura"],
-            veic["altura"]
-        ])
+        # =====================================
+        # VALIDAÇÃO INDIVIDUAL DAS CARGAS
+        # =====================================
         
-        if any(
-            c > v
-            for c, v in zip(dim_carga, dim_veiculo)
-        ):
+        carga_incompativel = False
+        
+        for carga in cargas:
+        
+            dim_carga = sorted([
+                float(carga["Comprimento (m)"]),
+                float(carga["Largura (m)"]),
+                float(carga["Altura (m)"])
+            ])
+        
+            dim_veiculo = sorted([
+                veic["comprimento"],
+                veic["largura"],
+                veic["altura"]
+            ])
+        
+            if any(
+                c > v
+                for c, v in zip(dim_carga, dim_veiculo)
+            ):
+                carga_incompativel = True
+                break
+        
+        if carga_incompativel:
             continue
 
         nome = veic["Veículo"]
