@@ -1648,7 +1648,13 @@ def dividir_carga_multi(cargas, df_veiculos, empilhavel=True):
 
     return df_multi
 
-def gerar_combinacoes(df_testar, valor_total, peso_total, empilhavel):
+def gerar_combinacoes(
+    df_testar,
+    valor_total,
+    peso_total,
+    empilhavel,
+    cargas
+):
 
     combos = []
     usados = set()
@@ -1663,6 +1669,56 @@ def gerar_combinacoes(df_testar, valor_total, peso_total, empilhavel):
             categoria_1 = categoria_veiculo(v1["Veículo"])
             categoria_2 = categoria_veiculo(v2["Veículo"])
             
+            # =========================================
+            # VALIDAÇÃO FÍSICA DO COMBO
+            # =========================================
+            
+            max_comp = max(
+                c["Comprimento (m)"]
+                for c in cargas
+            )
+            
+            max_larg = max(
+                c["Largura (m)"]
+                for c in cargas
+            )
+            
+            max_alt = max(
+                c["Altura (m)"]
+                for c in cargas
+            )
+            
+            dim_carga = sorted([
+                max_comp,
+                max_larg,
+                max_alt
+            ])
+            
+            dim_v1 = sorted([
+                v1["comprimento"],
+                v1["largura"],
+                v1["altura"]
+            ])
+            
+            dim_v2 = sorted([
+                v2["comprimento"],
+                v2["largura"],
+                v2["altura"]
+            ])
+            
+            cabe_v1 = not any(
+                c > v
+                for c, v in zip(dim_carga, dim_v1)
+            )
+            
+            cabe_v2 = not any(
+                c > v
+                for c, v in zip(dim_carga, dim_v2)
+            )
+            
+            if not cabe_v1 and not cabe_v2:
+                continue
+
             # evita misturas muito diferentes
             combos_permitidos = [
                 ("HR", "VUC"),
@@ -2085,7 +2141,8 @@ def executar_calculo(cargas, df_veiculos, selecionados, empilhavel):
         df_testar,
         valor_total,
         peso_total,
-        empilhavel
+        empilhavel,
+        cargas
     )
     
     df_multi_unificado = pd.concat(
