@@ -1733,7 +1733,7 @@ if isinstance(st.session_state.df_result, pd.DataFrame):
 
         melhor = df_rank.iloc[0]["Veículo"]
 
-        st.markdown("### 🏆 Melhor opção encontrada")
+        st.markdown("###  Melhor opção encontrada")
         st.info(df_rank.iloc[0]["Motivo"])
 
         def destacar(row):
