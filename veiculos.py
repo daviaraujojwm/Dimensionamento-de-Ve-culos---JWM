@@ -2179,6 +2179,20 @@ def executar_calculo(cargas, df_veiculos, selecionados, empilhavel):
     # Vamos retornar todos os veículos testados para que o usuário veja o motivo da inviabilidade
     df_rank = pd.DataFrame(registros)
     
+    df_rank = df_rank[
+        df_rank["Status"] == "Viável"
+    ].copy()
+    
+    if df_rank.empty:
+        return pd.DataFrame([{
+            "Veículo": "Nenhum",
+            "Status": "Inviável",
+            "Motivo": "Nenhum veículo atende critérios",
+            "Aproveitamento (%)": 0,
+            "Aproveitamento Peso (%)": 0,
+            "Score": 0
+        }]), {"cenario": None}
+    
     # Adicionamos colunas de aproveitamento para o usuário ver o quão longe está
     def calc_aprov(row):
         nome = row["Veículo"]
