@@ -871,11 +871,12 @@ def escolher_veiculo_unico_completo(cargas_unit, df_veiculos, cargas, empilhavel
         )
         
         # evita veículos absurdamente vazios
-        if aproveitamento_volume < 18:
+        if (
+            aproveitamento_volume < 5
+            and aproveitamento_peso < 10
+        ):
             continue
-        
-        if aproveitamento_peso < 3:
-            continue
+            
         # evita veículos desbalanceados
         if (
             aproveitamento_peso > 85
@@ -1298,10 +1299,21 @@ def simular_empilhamento_3d(
         contador += 1
 
         # evita simular caixas impossíveis
-        if (
-            item["comp"] > comp_veic
-            or item["larg"] > larg_veic
-            or item["alt"] > alt_veic
+        dim_item = sorted([
+            item["comp"],
+            item["larg"],
+            item["alt"]
+        ])
+        
+        dim_veic = sorted([
+            comp_veic,
+            larg_veic,
+            alt_veic
+        ])
+        
+        if any(
+            c > v
+            for c, v in zip(dim_item, dim_veic)
         ):
             continue
 
@@ -1515,6 +1527,25 @@ def gerar_cenarios_multi(cargas, df_veiculos, empilhavel=True, max_opcoes=5):
 
         nome = veic["Veículo"]
 
+        max_comp = max(c["Comprimento (m)"] for c in cargas)
+        max_larg = max(c["Largura (m)"] for c in cargas)
+        max_alt = max(c["Altura (m)"] for c in cargas)
+        
+        dim_carga = sorted([
+            max_comp,
+            max_larg,
+            max_alt
+        ])
+        
+        dim_veiculo = sorted([
+            veic["comprimento"],
+            veic["largura"],
+            veic["altura"]
+        ])
+        
+        if any(c > v for c, v in zip(dim_carga, dim_veiculo)):
+            continue
+
         # eficiência por tipo
         eficiencia = get_eficiencia(nome)
 
@@ -1655,7 +1686,14 @@ def gerar_combinacoes(
     empilhavel,
     cargas
 ):
-
+    qtd_total = sum(
+        int(c["Quantidade"])
+        for c in cargas
+    )
+    
+    if qtd_total <= 1:
+        return pd.DataFrame()
+        
     combos = []
     usados = set()
 
@@ -1967,7 +2005,10 @@ def executar_calculo(cargas, df_veiculos, selecionados, empilhavel):
         aproveitamento_vol = min(100, (valor_total / capacidade) * 100)
         aproveitamento_peso = min(100, (peso_total / veic_unico["peso_max"]) * 100)
 
-        if aproveitamento_vol >= 15:
+        if (
+            aproveitamento_vol >= 5
+            or aproveitamento_peso >= 10
+        ):
 
             score = calcular_score(
                 valor_total,
@@ -2038,7 +2079,10 @@ def executar_calculo(cargas, df_veiculos, selecionados, empilhavel):
         aproveitamento_peso = min(100, (peso_total / peso_max) * 100)
         
         # evita veículos absurdamente vazios
-        if aproveitamento_vol < 15:
+        if (
+            aproveitamento_vol < 5
+            and aproveitamento_peso < 10
+        ):
             continue
         
         # evita aproveitamento impossível
@@ -2082,52 +2126,6 @@ def executar_calculo(cargas, df_veiculos, selecionados, empilhavel):
     else:
         melhor_rank = pd.DataFrame()
 
-
-    # ==========================================
-    # FALLBACK ABSOLUTO
-    # ==========================================
-    
-    if df_rank.empty:
-    
-        fallback = []
-    
-        for _, veic in df_testar.iterrows():
-    
-            nome = veic["Veículo"]
-    
-            volume_base = (
-                  volume_veiculo(veic)
-            )
-    
-            fator = get_fator(nome)
-            eficiencia = get_eficiencia(nome)
-    
-            capacidade = volume_base * fator * eficiencia
-    
-            aproveitamento = (
-                valor_total / capacidade * 100
-                if capacidade > 0 else 0
-            )
-    
-            aproveitamento_peso = (
-                peso_total / veic["peso_max"] * 100
-                if veic["peso_max"] > 0 else 0
-            )
-    
-            fallback.append({
-                "Veículo": nome,
-                "Status": "Operação Especial",
-                "Motivo": "Necessita operação especial",
-                "Cenário": "FALLBACK",
-                "Aproveitamento (%)": round(aproveitamento, 2),
-                "Aproveitamento Peso (%)": round(aproveitamento_peso, 2),
-                "Score": 1
-            })
-    
-        df_rank = pd.DataFrame(fallback)
-        
-        return df_rank, {"cenario": "RANKING"}
-    
     # ==========================
     # ✅ MULTI + COMBO UNIFICADO
     # ==========================
@@ -2173,6 +2171,9 @@ def executar_calculo(cargas, df_veiculos, selecionados, empilhavel):
                 return melhor_rank, {"cenario": "RANKING"}
     
         return melhor, {"cenario": "MULTI"}
+
+    if not melhor_rank.empty:
+        return melhor_rank, {"cenario": "RANKING"}
     
     # ✅ 3 — FALLBACK (nunca ficar vazio)
     # Se chegamos aqui, significa que não houve veículo "Viável" 100%
