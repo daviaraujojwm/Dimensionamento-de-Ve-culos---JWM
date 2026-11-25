@@ -1083,16 +1083,18 @@ if calculou:
 # 🔍 SIMULAÇÃO 3D
 # ============================
     
-    if resultado_ok:
-        melhor_veiculo = df_res.iloc[0]["Veículo"]
-    
-        if " + " in melhor_veiculo:
-            st.warning("Simulação 3D para combos ainda não implementada. "
-                       "O combo já foi validado pela distribuição de cargas.")
-            st.stop()
-    
-        veic = df_veiculos[df_veiculos["Veículo"] == melhor_veiculo].iloc[0]
-        cargas = st.session_state.cargas
+if resultado_ok:
+    melhor_veiculo = df_res.iloc[0]["Veículo"]
+
+    if " + " in melhor_veiculo:
+        st.warning(
+            "Simulação 3D para combos ainda não implementada. "
+            "O combo já foi validado pela distribuição de cargas."
+        )
+        st.stop()
+
+    veic = df_veiculos[df_veiculos["Veículo"] == melhor_veiculo].iloc[0]
+    cargas = st.session_state.cargas
 
     qtd_total_real = int(sum(c["Quantidade"] for c in cargas))
     cargas_unitarias = reduzir_cargas_para_simulacao(cargas, MAX_CAIXAS_3D)
