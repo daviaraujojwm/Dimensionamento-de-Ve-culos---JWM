@@ -1086,8 +1086,8 @@ if calculou:
     if " + " in melhor_veiculo:
         st.warning("Simulação 3D para combos ainda não implementada. "
                    "O combo já foi validado pela distribuição de cargas.")
-        return
-
+        st.stop()
+        
     veic = df_veiculos[df_veiculos["Veículo"] == melhor_veiculo].iloc[0]
     cargas = st.session_state.cargas
 
