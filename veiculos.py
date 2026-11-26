@@ -498,8 +498,6 @@ empilhavel = st.toggle(
     key="empilhavel"
 )
 
-st.subheader("📦 Adicionar carga")
-
 # ========================================
 # ✅ BOTÃO DE ADICIONAR CARGA
 # ========================================
