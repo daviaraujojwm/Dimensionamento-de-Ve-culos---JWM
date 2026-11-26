@@ -1207,7 +1207,8 @@ if calculou:
         
         st.write(f"Pontuação do ranking: **{float(melhor['Score']):.2f} / 100**")
         st.caption(
-
+            "A pontuação considera aproveitamento e o custo relativo cadastrado "
+            "para cada veículo; não representa um preço de frete."
         )
 
         def destacar(row):
