@@ -1206,6 +1206,7 @@ if calculou:
             )
         
         st.write(f"Pontuação do ranking: **{float(melhor['Score']):.2f} / 100**")
+        st.caption(
 
         )
 
