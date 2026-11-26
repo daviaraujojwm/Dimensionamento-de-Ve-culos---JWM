@@ -639,23 +639,50 @@ def assinatura_atual():
 # AUXILIARES
 # ============================
 def reduzir_cargas_para_simulacao(cargas, limite):
-    total = sum(int(c["Quantidade"]) for c in cargas)
-    if total <= 0:
+    quantidades = [int(c["Quantidade"]) for c in cargas]
+    total = sum(quantidades)
+
+    if total <= 0 or limite <= 0:
         return []
-    fator = min(1.0, limite / total)
+
+    if total <= limite:
+        amostras = quantidades[:]
+    else:
+        proporcoes = [q * limite / total for q in quantidades]
+        amostras = [int(p) for p in proporcoes]
+
+        restantes = limite - sum(amostras)
+        ordem = sorted(
+            range(len(proporcoes)),
+            key=lambda i: proporcoes[i] - amostras[i],
+            reverse=True,
+        )
+
+        for i in ordem[:restantes]:
+            amostras[i] += 1
 
     unidades = []
-    for c in cargas:
-        comp = float(c["Comprimento (m)"]); larg = float(c["Largura (m)"])
-        alt = float(c["Altura (m)"]);       peso = float(c["Peso unitário (kg)"])
-        vol = comp * larg * alt
-        if min(comp, larg, alt, peso) <= 0 or vol <= 0:
+
+    for carga, quantidade_amostra in zip(cargas, amostras):
+        comp = float(carga["Comprimento (m)"])
+        larg = float(carga["Largura (m)"])
+        alt = float(carga["Altura (m)"])
+        peso = float(carga["Peso unitário (kg)"])
+        volume = comp * larg * alt
+
+        if min(comp, larg, alt, peso) <= 0 or quantidade_amostra <= 0:
             continue
-        n = max(1, round(int(c["Quantidade"]) * fator))
-        unidades.extend(
-            [{"comp": comp, "larg": larg, "alt": alt, "peso": peso,
-              "densidade": peso / vol, "volume": vol}] * n
-        )
+
+        item = {
+            "comp": comp,
+            "larg": larg,
+            "alt": alt,
+            "peso": peso,
+            "densidade": peso / volume,
+            "volume": volume,
+        }
+        unidades.extend(item.copy() for _ in range(quantidade_amostra))
+
     return unidades
 
 def calcular_totais_reais(cargas, empilhavel=True):
@@ -797,27 +824,31 @@ def calcular_peso_carga(carga):
         * int(carga["Quantidade"])
     )
 
-def carga_cabe_no_veiculo(carga, veic):
+def carga_cabe_no_veiculo(carga, veic, empilhavel=True):
+    comp = float(carga["Comprimento (m)"])
+    larg = float(carga["Largura (m)"])
+    alt = float(carga["Altura (m)"])
 
-    dim_carga = sorted([
-        float(carga["Comprimento (m)"]),
-        float(carga["Largura (m)"]),
-        float(carga["Altura (m)"])
-    ])
+    comp_v = float(veic["comprimento"])
+    larg_v = float(veic["largura"])
+    alt_v = float(veic["altura"])
 
-    dim_veiculo = sorted([
-        veic["comprimento"],
-        veic["largura"],
-        veic["altura"]
-    ])
+    if empilhavel:
+        # Permite girar a carga nos três eixos.
+        dimensoes_ok = any(
+            c <= comp_v and l <= larg_v and a <= alt_v
+            for c, l, a in permutations((comp, larg, alt))
+        )
+    else:
+        # Sem empilhamento, a altura da carga continua sendo a altura.
+        dimensoes_ok = (
+            (comp <= comp_v and larg <= larg_v and alt <= alt_v)
+            or
+            (larg <= comp_v and comp <= larg_v and alt <= alt_v)
+        )
 
-    if any(c > v for c, v in zip(dim_carga, dim_veiculo)):
-        return False
-
-    if calcular_peso_carga(carga) > veic["peso_max"]:
-        return False
-
-    return True
+    peso_ok = calcular_peso_carga(carga) <= float(veic["peso_max"])
+    return dimensoes_ok and peso_ok
 
 
 ORDEM_CATEGORIAS = ["FIORINO", "VAN", "HR", "VUC", "TRES_QUARTOS",
@@ -867,10 +898,16 @@ def gerar_combinacoes(df_testar, valor_total, peso_total, empilhavel, cargas):
                 vol_c = calcular_volume_carga(carga, empilhavel)
                 peso_c = calcular_peso_carga(carga)
 
-                pode1 = (carga_cabe_no_veiculo(carga, v1)
-                         and peso1 + peso_c <= pmax1 and vol1 + vol_c <= cap1)
-                pode2 = (carga_cabe_no_veiculo(carga, v2)
-                         and peso2 + peso_c <= pmax2 and vol2 + vol_c <= cap2)
+                pode1 = (
+                    carga_cabe_no_veiculo(carga, v1, empilhavel)
+                    and peso1 + peso_c <= pmax1
+                    and vol1 + vol_c <= cap1
+                )
+                pode2 = (
+                    carga_cabe_no_veiculo(carga, v2, empilhavel)
+                    and peso2 + peso_c <= pmax2
+                    and vol2 + vol_c <= cap2
+                )
 
                 if pode1 and (vol1 / cap1) <= (vol2 / cap2):
                     aloc1.append(f"Carga {idx}"); peso1 += peso_c; vol1 += vol_c
@@ -934,34 +971,38 @@ def executar_calculo(cargas, df_veiculos, selecionados, empilhavel):
         cargas,
         empilhavel
     )
-############################################################################################################    
+    
     # --------------------------------
     # Viabilidade básica (peso + volume)
     # --------------------------------
-    dim_cargas = [
-        sorted([float(c["Comprimento (m)"]), float(c["Largura (m)"]), float(c["Altura (m)"])])
-        for c in cargas
-    ]
-
     registros, ranking = [], []
 
     for _, veic in df_testar.iterrows():
         nome = veic["Veículo"]
-        dim_v = sorted([veic["comprimento"], veic["largura"], veic["altura"]])
         peso_max = veic["peso_max"]
         capacidade_max = capacidade_veiculo(veic, empilhavel)
 
         motivos = []
-        if any(any(c > v for c, v in zip(d, dim_v)) for d in dim_cargas):
+
+        dimensoes_ok = all(
+            carga_cabe_no_veiculo(carga, veic, empilhavel)
+            for carga in cargas
+        )
+
+        if not dimensoes_ok:
             motivos.append("Dimensão excede")
+
         if peso_total > peso_max:
             motivos.append("Excede peso")
+
         if valor_total > capacidade_max:
             motivos.append("Excede capacidade")
 
         if motivos:
             registros.append({
-                "Veículo": nome, "Status": "Inviável", "Motivo": " + ".join(motivos)
+                "Veículo": nome,
+                "Status": "Inviável",
+                "Motivo": " + ".join(motivos),
             })
             continue
 
@@ -1083,7 +1124,10 @@ if calculou:
 # 🔍 SIMULAÇÃO 3D
 # ============================
     
-if resultado_ok:
+def render_simulacao_3d():
+    if not resultado_ok:
+        return
+
     melhor_veiculo = df_res.iloc[0]["Veículo"]
 
     if " + " in melhor_veiculo:
@@ -1091,10 +1135,14 @@ if resultado_ok:
             "Simulação 3D para combos ainda não implementada. "
             "O combo já foi validado pela distribuição de cargas."
         )
-        st.stop()
+        return
 
     veic = df_veiculos[df_veiculos["Veículo"] == melhor_veiculo].iloc[0]
     cargas = st.session_state.cargas
+
+    # Mova para cá o restante do bloco atual da simulação,
+    # desde qtd_total_real até st.plotly_chart(...),
+    # indentando cada linha com mais 4 espaços.
 
     qtd_total_real = int(sum(c["Quantidade"] for c in cargas))
     cargas_unitarias = reduzir_cargas_para_simulacao(cargas, MAX_CAIXAS_3D)
