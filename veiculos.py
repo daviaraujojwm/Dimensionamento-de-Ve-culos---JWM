@@ -1145,9 +1145,9 @@ def render_simulacao_3d():
     # indentando cada linha com mais 4 espaços.
 
     qtd_total_real = int(sum(c["Quantidade"] for c in cargas))
-    cargas_unitarias = reduzir_cargas_para_simulacao(cargas, MAX_CAIXAS_3D)
+    cargas_unitarias = reduzir_cargas_para_simulacao(cargas, qtd_total_real)
     qtd_simulada = len(cargas_unitarias)
-    escala = qtd_total_real / qtd_simulada if qtd_simulada else 1
+    escala = 1
 
     posicoes, caixas, volume_usado, peso_usado, centro_ok = simular_empilhamento_3d(
         cargas_unitarias, veic, empilhavel
@@ -1178,13 +1178,11 @@ def render_simulacao_3d():
         st.success("✅ Todas as caixas foram alocadas.")
     if not centro_ok:
         st.warning("⚠ Carga concentrada na traseira — verifique a distribuição de peso.")
-    if len(posicoes) > MAX_RENDER_3D:
-        st.caption(f"Exibindo {MAX_RENDER_3D} de {len(posicoes)} caixas simuladas.")
 
     fig = go.Figure()
     cores = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728"]
 
-    for i, (x, y, z, c, l, a) in enumerate(posicoes[:MAX_RENDER_3D]):
+    for i, (x, y, z, c, l, a) in enumerate(posicoes):
         fig.add_trace(go.Mesh3d(
             x=[x, x+c, x+c, x, x, x+c, x+c, x],
             y=[y, y, y+l, y+l, y, y, y+l, y+l],
