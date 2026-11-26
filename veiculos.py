@@ -13,7 +13,7 @@ st.set_page_config(
 )
 
 MAX_CAIXAS_3D = 200
-MAX_RENDER_3D = 80
+MAX_RENDER_3D = MAX_CAIXAS_3D
 
 
 
