@@ -889,7 +889,10 @@ def gerar_combinacoes(df_testar, valor_total, peso_total, empilhavel, cargas):
 
             aprov_vol = valor_total / (cap1 + cap2) * 100
             aprov_peso = peso_total / (pmax1 + pmax2) * 100
-            if aprov_vol > 100 or aprov_peso > 100 or aprov_vol < 15:
+            if aprov_vol > 100 or aprov_peso > 100:
+                continue
+            
+            if max(aprov_vol, aprov_peso) < 15:
                 continue
 
             aloc1, aloc2 = [], []
