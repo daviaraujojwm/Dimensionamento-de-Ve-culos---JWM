@@ -1186,7 +1186,30 @@ if calculou:
         melhor = df_rank.iloc[0]
 
         st.markdown("### 🏆 Melhor opção encontrada")
-        st.success(f"**{melhor['Veículo']}** — {melhor['Motivo']}")
+        st.success(f"**{melhor['Veículo']}**")
+        
+        st.markdown("#### Motivo da escolha")
+        
+        if " + " in str(melhor["Veículo"]):
+            st.write(melhor["Motivo"])
+        else:
+            tipo_ocupacao = "volume" if empilhavel else "área do piso"
+        
+            st.write(
+                f"O veículo passou nas verificações de dimensões, peso e capacidade. "
+                f"O aproveitamento de {tipo_ocupacao} é "
+                f"**{float(melhor['Aproveitamento (%)']):.2f}%**."
+            )
+            st.write(
+                f"O aproveitamento do limite de peso é "
+                f"**{float(melhor['Aproveitamento Peso (%)']):.2f}%**."
+            )
+        
+        st.write(f"Pontuação do ranking: **{float(melhor['Score']):.2f} / 100**")
+        st.caption(
+            "A pontuação considera aproveitamento e o custo relativo cadastrado "
+            "para cada veículo; não representa um preço de frete."
+        )
 
         def destacar(row):
             if row["Veículo"] == melhor["Veículo"]:
