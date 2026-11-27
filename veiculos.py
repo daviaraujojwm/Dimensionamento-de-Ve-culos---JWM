@@ -560,44 +560,39 @@ if st.session_state.cargas:
                         raise ValueError(f"Coluna obrigatória ausente: {col}")
 
                 for _, row in df_editado.iterrows():
-
-                    # 🔒 garante tipo numérico
-                    campos = ["Comprimento (m)", "Largura (m)", "Altura (m)", "Peso unitário (kg)", "Quantidade"]
+                    campos = [
+                        "Comprimento (m)", "Largura (m)", "Altura (m)",
+                        "Peso unitário (kg)", "Quantidade",
+                    ]
+                
                     if row[campos].isna().any():
                         raise ValueError("Há campos vazios na tabela.")
+                
                     try:
-                        comp = float(row["Comprimento (m)"])
-                        larg = float(row["Largura (m)"])
-                        alt = float(row["Altura (m)"])
-                        peso = float(row["Peso unitário (kg)"])
-                    except Exception:
+                        c = float(row["Comprimento (m)"])
+                        l = float(row["Largura (m)"])
+                        a = float(row["Altura (m)"])
+                        p = float(row["Peso unitário (kg)"])
+                        qtd_num = float(row["Quantidade"])
+                    except (TypeError, ValueError, OverflowError):
                         raise ValueError("Valores inválidos na tabela.")
-                    
-                    if comp <= 0 or larg <= 0 or alt <= 0:
-                        raise ValueError("Dimensões inválidas.")
-                    
-                    if peso <= 0:
-                        raise ValueError("Peso inválido.")
-                                        
-                    vol_unit = comp * larg * alt
-                    
-                    try:
-                        qtd_row = int(row["Quantidade"])
-                    except Exception as e:
-                        raise ValueError("Quantidade inválida.")
-                                        
-                    if qtd_row <= 0:
-                        raise ValueError("Quantidade inválida.")
-                    peso_total = peso * qtd_row
-                    
+                
+                    erros_linha = validar_inputs(c, l, a, p, qtd_num)
+                    if erros_linha:
+                        raise ValueError(" | ".join(erros_linha))
+                
+                    qtd_row = int(qtd_num)
+                    vol_unit = c * l * a
+                    peso_total = p * qtd_row
+                
                     novas_cargas.append({
-                        "Comprimento (m)": comp,
-                        "Largura (m)": larg,
-                        "Altura (m)": alt,
-                        "Peso unitário (kg)": peso,
+                        "Comprimento (m)": c,
+                        "Largura (m)": l,
+                        "Altura (m)": a,
+                        "Peso unitário (kg)": p,
                         "Quantidade": qtd_row,
                         "Volume total (m³)": vol_unit * qtd_row,
-                        "Peso total (kg)": peso_total
+                        "Peso total (kg)": peso_total,
                     })
 
                 st.session_state.cargas = novas_cargas
@@ -889,9 +884,8 @@ def gerar_combinacoes(df_testar, valor_total, peso_total, empilhavel, cargas):
 
             aprov_vol = valor_total / (cap1 + cap2) * 100
             aprov_peso = peso_total / (pmax1 + pmax2) * 100
-            if aprov_vol > 100 or aprov_peso > 100 or aprov_vol < 15:
+            if aprov_vol > 100 or aprov_peso > 100 or max(aprov_vol, aprov_peso) < 15:
                 continue
-
             aloc1, aloc2 = [], []
             cargas_v1, cargas_v2 = [], []
             peso1 = peso2 = vol1 = vol2 = 0.0
